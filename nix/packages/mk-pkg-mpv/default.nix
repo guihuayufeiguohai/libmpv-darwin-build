@@ -52,6 +52,7 @@ let
       patch -p1 <${../../../patches/mpv-remove-libass.patch}
     fi
     patch -p1 <${../../../patches/ao_coreaudio_tap.patch}
+    echo "// force rebuild $(date)" >> audio/out/ao_coreaudio.c
     cd -
 
     cp -r $src $out
