@@ -51,6 +51,7 @@ let
     if [ "${variant}" == "${variants.audio}" ]; then
       patch -p1 <${../../../patches/mpv-remove-libass.patch}
     fi
+    patch -p1 <${../../../patches/ao_coreaudio_tap.patch}
     cd -
 
     cp -r $src $out
