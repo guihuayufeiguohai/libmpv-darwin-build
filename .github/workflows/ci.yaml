@@ -9,6 +9,13 @@ on:
   pull_request:
     branches:
       - "*"
+  workflow_dispatch:        # ← 新增
+    inputs:
+      force_rebuild:
+        description: '强制从源码重新编译（忽略缓存）'
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   ci:
@@ -67,6 +74,7 @@ jobs:
         env:
           XCODE_PATH: ${{ steps.xcode_path.outputs.xcode_path }}
           VERSION: ${{ steps.version.outputs.version }}
+          NIX_CONFIG: ${{ github.event.inputs.force_rebuild == 'true' && 'substitute = false' || '' }}
         run: |
           nix develop -c make XCODE_PATH=${XCODE_PATH} VERSION=${VERSION}
 
