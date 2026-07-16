@@ -26,6 +26,7 @@ let
   ffmpeg = callPackage ../mk-pkg-ffmpeg/default.nix { };
   uchardet = callPackage ../mk-pkg-uchardet/default.nix { };
   libass = callPackage ../mk-pkg-libass/default.nix { };
+  libbluray = callPackage ../mk-pkg-libbluray/default.nix { };
 
   nativeBuildInputs = [
     pkgs.meson
@@ -77,6 +78,7 @@ pkgs.stdenvNoCC.mkDerivation {
     ++ pkgs.lib.optionals (variant == "video") [
       uchardet
       libass
+      libbluray
     ];
   configurePhase = ''
     DISABLE_ALL_OPTIONS=(
@@ -98,7 +100,7 @@ pkgs.stdenvNoCC.mkDerivation {
       -Dlcms2=disabled `# LCMS2 support`
       -Dlibarchive=disabled `# libarchive wrapper for reading zip files and more`
       -Dlibavdevice=disabled `# libavdevice`
-      -Dlibbluray=disabled `# Bluray support`
+      -Dlibbluray=enabled `# Bluray support`
       -Dlua=disabled `# Lua`
       -Dpthread-debug=disabled `# pthread runtime debugging wrappers`
       -Drubberband=disabled `# librubberband support`
