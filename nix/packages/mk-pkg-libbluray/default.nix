@@ -6,7 +6,7 @@
 let
   name = "libbluray";
   packageLock = {
-    version = "1.4.0";
+    version = "1.4.0-ci-fix";
     url = "https://github.com/mpvkit/libbluray-build/releases/download/1.4.0/Libbluray.xcframework.zip";
     sha256 = "bc037d34e2b0b5ab7f202fb371f5fb298136cc66fdf406c2172185d06f53f18d"; # nix-prefetch-url
   };
@@ -22,7 +22,7 @@ pkgs.stdenvNoCC.mkDerivation {
   dontConfigure = true;
   dontBuild = true;
 
- installPhase = ''
+  installPhase = ''
   mkdir -p $out/include/bluray $out/lib $out/lib/pkgconfig
 
   case ${os} in
@@ -46,16 +46,16 @@ pkgs.stdenvNoCC.mkDerivation {
   # 创建 pkg-config 文件
   cat > "$out/lib/pkgconfig/libbluray.pc" << 'PKGCONFIG'
 prefix=@out@
-exec_prefix=${prefix}
-libdir=${exec_prefix}/lib
-includedir=${prefix}/include
+exec_prefix=''${prefix}
+libdir=''${exec_prefix}/lib
+includedir=''${prefix}/include
 
 Name: libbluray
 Description: Blu-ray disc playback library
 Version: @version@
 Requires:
-Libs: -L${libdir} -lbluray
-Cflags: -I${includedir}
+Libs: -L''${libdir} -lbluray
+Cflags: -I''${includedir}
 PKGCONFIG
   sed -i "s|@out@|$out|g; s|@version@|${version}|g" "$out/lib/pkgconfig/libbluray.pc"
 '';
