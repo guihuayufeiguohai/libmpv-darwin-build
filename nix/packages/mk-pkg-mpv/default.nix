@@ -62,38 +62,32 @@ let
     src = patchedSource;
     inherit nativeBuildInputs;
   };
-    libbluray-framework = pkgs.stdenvNoCC.mkDerivation {
-  name = "libbluray-framework-${os}-${arch}";
-  src = ../../../Frameworks/Libbluray.xcframework;
-  buildPhase = ''
-    case "${os}-${arch}" in
-      ios-arm64)
-        SLICE="ios-arm64"
-        ;;
-      iossimulator-*)
-        SLICE="ios-arm64_x86_64-simulator"
-        ;;
-      macos-*)
-        SLICE="macos-arm64_x86_64"
-        ;;
-      *)
-        echo "FATAL: Unknown slice for ${os}-${arch}"
-        exit 1
-        ;;
-    esac
 
-    # 1. 复制整个 .framework 到输出目录
-    mkdir -p $out
-    cp -R $src/$SLICE/Libbluray.framework $out/Libbluray.framework
-    chmod -R +w $out/Libbluray.framework
+  libbluray-framework = pkgs.stdenvNoCC.mkDerivation {
+    name = "libbluray-framework-${os}-${arch}";
+    src = ../../../Frameworks/Libbluray.xcframework;
+    buildPhase = ''
+      case "${os}-${arch}" in
+        ios-arm64)                SLICE="ios-arm64" ;;
+        iossimulator-*)           SLICE="ios-arm64_x86_64-simulator" ;;
+        macos-*)                  SLICE="macos-arm64_x86_64" ;;
+        *) echo "FATAL: Unknown slice for ${os}-${arch}"; exit 1 ;;
+      esac
 
-    # 2. 提取头文件（meson 需要验证头文件存在）
-    mkdir -p $out/include
-    cp -R $src/$SLICE/Libbluray.framework/Headers $out/include/bluray
+      # 1. 复制整个 .framework 到输出目录
+      mkdir -p $out
+      cp -R $src/$SLICE/Libbluray.framework $out/Libbluray.framework
+      chmod -R +w $out/Libbluray.framework
 
-    # 3. 生成 pkg-config 文件
-    mkdir -p $out/lib/pkgconfig
-    cat > $out/lib/pkgconfig/libbluray.pc <<'EOF'
+      # 2. 提取头文件（meson 需要验证头文件存在）
+      mkdir -p $out/include/bluray
+      if [ -d $src/$SLICE/Libbluray.framework/Headers ]; then
+        cp -R $src/$SLICE/Libbluray.framework/Headers/* $out/include/bluray/
+      fi
+
+      # 3. 生成 pkg-config 文件
+      mkdir -p $out/lib/pkgconfig
+      cat > $out/lib/pkgconfig/libbluray.pc <<'EOF'
 prefix=${pcfiledir}/../..
 exec_prefix=${prefix}
 libdir=${prefix}
@@ -105,9 +99,9 @@ Version: 1.3.4
 Libs: -F${prefix} -framework Libbluray
 Cflags: -F${prefix} -I${includedir}
 EOF
-  '';
-  installPhase = "true";
-};
+    '';
+    installPhase = "true";
+  };
 in
 
 pkgs.stdenvNoCC.mkDerivation {
@@ -304,13 +298,20 @@ pkgs.stdenvNoCC.mkDerivation {
       fi
     fi
 
-export PKG_CONFIG_PATH="${libbluray-framework}/lib/pkgconfig:$PKG_CONFIG_PATH"
-export CFLAGS="$CFLAGS -F${libbluray-framework}"
-export LDFLAGS="$LDFLAGS -F${libbluray-framework} -framework Libbluray"
+    # 1. 生成额外的交叉文件，强制 meson 在交叉编译时找到我们的 .pc 文件
+    cat > "$TMPDIR/cross-libbluray.ini" <<CROSS_EOF
+[properties]
+pkg_config_libdir = '${libbluray-framework}/lib/pkgconfig'
+CROSS_EOF
+
+    # 2. 设置编译与链接标志
+    export CFLAGS="$CFLAGS -F${libbluray-framework}"
+    export LDFLAGS="$LDFLAGS -F${libbluray-framework} -framework Libbluray"
 
     meson setup build $src \
       --native-file ${nativeFile} \
       --cross-file ${crossFile} \
+      --cross-file "$TMPDIR/cross-libbluray.ini" \
       --prefix=$out \
       "''${OPTIONS[@]}" |
       tee configure.log
