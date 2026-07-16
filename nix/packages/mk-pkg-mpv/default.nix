@@ -62,42 +62,43 @@ let
     src = patchedSource;
     inherit nativeBuildInputs;
   };
-    libbluray-framework = pkgs.stdenvNoCC.mkDerivation {
-    name = "libbluray-framework-${os}-${arch}";
-    src = ../../../Frameworks/Libbluray.xcframework;
-    buildPhase = ''
-      case "${os}-${arch}" in
-        ios-arm64)                SLICE="ios-arm64" ;;
-        iossimulator-*)           SLICE="ios-arm64_x86_64-simulator" ;;
-        macos-*)                  SLICE="macos-arm64_x86_64" ;;
-        *) echo "FATAL: Unknown slice for ${os}-${arch}"; exit 1 ;;
-      esac
+  libbluray-framework = pkgs.stdenvNoCC.mkDerivation {
+  name = "libbluray-framework-${os}-${arch}";
+  src = ../../../Frameworks/Libbluray.xcframework;
+  buildPhase = ''
+    case "${os}-${arch}" in
+      ios-arm64)                SLICE="ios-arm64" ;;
+      iossimulator-*)           SLICE="ios-arm64_x86_64-simulator" ;;
+      macos-*)                  SLICE="macos-arm64_x86_64" ;;
+      *) echo "FATAL: Unknown slice for ${os}-${arch}"; exit 1 ;;
+    esac
 
-      mkdir -p $out
-      cp -R $src/$SLICE/Libbluray.framework $out/Libbluray.framework
-      chmod -R +w $out/Libbluray.framework
+    mkdir -p $out
+    cp -R $src/$SLICE/Libbluray.framework $out/Libbluray.framework
+    chmod -R +w $out/Libbluray.framework
 
-      mkdir -p $out/include/bluray
-      if [ -d $src/$SLICE/Libbluray.framework/Headers ]; then
-        cp -R $src/$SLICE/Libbluray.framework/Headers/* $out/include/bluray/
-      fi
+    mkdir -p $out/include/bluray
+    if [ -d $src/$SLICE/Libbluray.framework/Headers ]; then
+      cp -R $src/$SLICE/Libbluray.framework/Headers/* $out/include/bluray/
+    fi
 
-      mkdir -p $out/lib/pkgconfig
-      cat > $out/lib/pkgconfig/libbluray.pc <<'EOF'
-prefix=${pcfiledir}/../..
-exec_prefix=${prefix}
-libdir=${prefix}
-includedir=${prefix}/include
+    mkdir -p $out/lib/pkgconfig
+    # 关键：使用 <<EOF，让 Shell 把 $out 替换为 /nix/store/... 绝对路径
+    cat > $out/lib/pkgconfig/libbluray.pc <<EOF
+prefix=$out
+exec_prefix=$out
+libdir=$out
+includedir=$out/include
 
 Name: libbluray
 Description: Blu-ray disc playback library
 Version: 1.3.4
-Libs: -F${prefix} -framework Libbluray
-Cflags: -F${prefix} -I${includedir}
+Libs: -F$out -framework Libbluray
+Cflags: -F$out -I$out/include
 EOF
-    '';
-    installPhase = "true";
-  };
+  '';
+  installPhase = "true";
+};
 in
 
 pkgs.stdenvNoCC.mkDerivation {
@@ -300,8 +301,8 @@ pkgs.stdenvNoCC.mkDerivation {
 pkg_config_libdir = '${libbluray-framework}/lib/pkgconfig'
 CROSS_EOF
 
-    export CFLAGS="$CFLAGS -F${libbluray-framework}"
-    export LDFLAGS="$LDFLAGS -F${libbluray-framework} -framework Libbluray"
+    #export CFLAGS="$CFLAGS -F${libbluray-framework}"
+    #export LDFLAGS="$LDFLAGS -F${libbluray-framework} -framework Libbluray"
 
     meson setup build $src \
       --native-file ${nativeFile} \
@@ -310,6 +311,13 @@ CROSS_EOF
       --prefix=$out \
       "''${OPTIONS[@]}" |
       tee configure.log
+
+  # 验证 pkg-config 是否能正常输出 cflags
+  echo "=== Checking pkg-config for libbluray ==="
+  pkg-config --cflags libbluray || echo "ERROR: pkg-config failed!"
+  echo "=========================================="
+
+
   '';
   buildPhase = ''
     meson compile -vC build
