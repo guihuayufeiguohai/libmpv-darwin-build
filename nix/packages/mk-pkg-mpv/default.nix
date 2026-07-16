@@ -63,34 +63,51 @@ let
     inherit nativeBuildInputs;
   };
     libbluray-framework = pkgs.stdenvNoCC.mkDerivation {
-    name = "libbluray-framework-${os}-${arch}";
-    src = ../../../Frameworks/Libbluray.xcframework;
-    buildPhase = ''
-      # 先输出 os / arch 值方便调试（可保留）
-      echo "os=${os} arch=${arch}"
-      case "${os}-${arch}" in
-        ios-arm64)
-          SLICE="ios-arm64"
-          ;;
-        iossimulator-*)
-          # 模拟器不管架构是 amd64 还是 arm64，都用双架构切片
-          SLICE="ios-arm64_x86_64-simulator"
-          ;;
-        macos-*)
-          SLICE="macos-arm64_x86_64"
-          ;;
-        *)
-          echo "FATAL: Unknown slice for ${os}-${arch}"
-          exit 1
-          ;;
-      esac
-      echo "Using slice: $SLICE"
-      mkdir -p $out
-      cp -R $src/$SLICE/Libbluray.framework $out/Libbluray.framework
-      chmod -R +w $out/Libbluray.framework
-    '';
-    installPhase = "true";
-  };
+  name = "libbluray-framework-${os}-${arch}";
+  src = ../../../Frameworks/Libbluray.xcframework;
+  buildPhase = ''
+    case "${os}-${arch}" in
+      ios-arm64)
+        SLICE="ios-arm64"
+        ;;
+      iossimulator-*)
+        SLICE="ios-arm64_x86_64-simulator"
+        ;;
+      macos-*)
+        SLICE="macos-arm64_x86_64"
+        ;;
+      *)
+        echo "FATAL: Unknown slice for ${os}-${arch}"
+        exit 1
+        ;;
+    esac
+
+    # 1. 复制整个 .framework 到输出目录
+    mkdir -p $out
+    cp -R $src/$SLICE/Libbluray.framework $out/Libbluray.framework
+    chmod -R +w $out/Libbluray.framework
+
+    # 2. 提取头文件（meson 需要验证头文件存在）
+    mkdir -p $out/include
+    cp -R $src/$SLICE/Libbluray.framework/Headers $out/include/bluray
+
+    # 3. 生成 pkg-config 文件
+    mkdir -p $out/lib/pkgconfig
+    cat > $out/lib/pkgconfig/libbluray.pc <<'EOF'
+prefix=${pcfiledir}/../..
+exec_prefix=${prefix}
+libdir=${prefix}
+includedir=${prefix}/include
+
+Name: libbluray
+Description: Blu-ray disc playback library
+Version: 1.3.4
+Libs: -F${prefix} -framework Libbluray
+Cflags: -F${prefix} -I${includedir}
+EOF
+  '';
+  installPhase = "true";
+};
 in
 
 pkgs.stdenvNoCC.mkDerivation {
@@ -287,8 +304,9 @@ pkgs.stdenvNoCC.mkDerivation {
       fi
     fi
 
-    export CFLAGS="$CFLAGS -F${libbluray-framework}"
-    export LDFLAGS="$LDFLAGS -F${libbluray-framework} -framework Libbluray"
+export PKG_CONFIG_PATH="${libbluray-framework}/lib/pkgconfig:$PKG_CONFIG_PATH"
+export CFLAGS="$CFLAGS -F${libbluray-framework}"
+export LDFLAGS="$LDFLAGS -F${libbluray-framework} -framework Libbluray"
 
     meson setup build $src \
       --native-file ${nativeFile} \
