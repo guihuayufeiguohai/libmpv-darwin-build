@@ -101,7 +101,7 @@ pkgs.stdenvNoCC.mkDerivation {
       -Dlcms2=disabled `# LCMS2 support`
       -Dlibarchive=disabled `# libarchive wrapper for reading zip files and more`
       -Dlibavdevice=disabled `# libavdevice`
-      -Dlibbluray=enabled `# Bluray support`
+      -Dlibbluray=disabled `# Bluray support`
       -Dlua=disabled `# Lua`
       -Dpthread-debug=disabled `# pthread runtime debugging wrappers`
       -Drubberband=disabled `# librubberband support`
@@ -230,6 +230,9 @@ pkgs.stdenvNoCC.mkDerivation {
 
       `# hwaccel features`
       -Dvideotoolbox-gl=enabled `# Videotoolbox with OpenGL`
+
+      `# Bluray support`
+      -Dlibbluray=enabled
     )
 
     IOS_OPTIONS=(
@@ -240,6 +243,9 @@ pkgs.stdenvNoCC.mkDerivation {
     IOS_VIDEO_OPTIONS=(
       `# hwaccel features`
       -Dios-gl=enabled `# iOS OpenGL ES hardware decoding interop support`
+
+    `# Bluray support`
+      -Dlibbluray=enabled
     )
 
     OPTIONS=("''${DISABLE_ALL_OPTIONS[@]}")
