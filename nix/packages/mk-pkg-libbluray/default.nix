@@ -6,7 +6,7 @@
 let
   name = "libbluray";
   packageLock = {
-    version = "1.3.4";
+    version = "1.4.0";
     url = "https://github.com/mpvkit/libbluray-build/releases/download/1.4.0/Libbluray.xcframework.zip";
     sha256 = "bc037d34e2b0b5ab7f202fb371f5fb298136cc66fdf406c2172185d06f53f18d"; # nix-prefetch-url
   };
