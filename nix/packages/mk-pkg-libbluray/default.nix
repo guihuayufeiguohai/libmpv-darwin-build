@@ -33,7 +33,6 @@ pkgs.stdenvNoCC.mkDerivation {
       bundle="./ios-arm64/Libbluray.framework"
       ;;
     iossimulator)
-      # 临时用 ios 的 bundle（仅用于测试，最终应禁用 libbluray）
       bundle="./ios-arm64/Libbluray.framework"
       ;;
   esac
@@ -45,18 +44,19 @@ pkgs.stdenvNoCC.mkDerivation {
   cp "$bundle/Libbluray" "$out/lib/libbluray.a"
 
   # 创建 pkg-config 文件
-  cat > "$out/lib/pkgconfig/libbluray.pc" <<EOF
-prefix=$out
-exec_prefix=\${prefix}
-libdir=\${exec_prefix}/lib
-includedir=\${prefix}/include
+  cat > "$out/lib/pkgconfig/libbluray.pc" << 'PKGCONFIG'
+prefix=@out@
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
 
 Name: libbluray
 Description: Blu-ray disc playback library
-Version: ${version}
+Version: @version@
 Requires:
-Libs: -L\${libdir} -lbluray
-Cflags: -I\${includedir}
-EOF
+Libs: -L${libdir} -lbluray
+Cflags: -I${includedir}
+PKGCONFIG
+  sed -i "s|@out@|$out|g; s|@version@|${version}|g" "$out/lib/pkgconfig/libbluray.pc"
 '';
 }
