@@ -23,7 +23,14 @@ pkgs.stdenvNoCC.mkDerivation {
   dontBuild = true;
 
   installPhase = ''
-  mkdir -p $out/include/bluray $out/lib $out/lib/pkgconfig
+  # 打印解压根目录和框架内容，便于调试
+  echo "Build directory contents:"
+  ls -l
+  echo "Framework bundle:"
+  ls -R ./ios-arm64/Libbluray.framework || true
+  echo "---"
+
+  mkdir -p $out/include/libbluray $out/lib $out/lib/pkgconfig
 
   case ${os} in
     macos)
@@ -38,7 +45,14 @@ pkgs.stdenvNoCC.mkDerivation {
   esac
 
   # 复制头文件
-  cp "$bundle/Headers/"*.h "$out/include/bluray/"
+    # 创建 include/libbluray 目录并复制头文件
+  mkdir -p $out/include/libbluray
+  if [ -d "$bundle/Headers" ]; then
+    cp -r "$bundle/Headers/." "$out/include/libbluray/"
+  else
+    echo "Error: Headers not found in $bundle"
+    exit 1
+  fi
 
   # 复制静态库并重命名
   cp "$bundle/Libbluray" "$out/lib/libbluray.a"
