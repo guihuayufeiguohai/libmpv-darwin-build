@@ -85,19 +85,19 @@ let
         cp -R $src/$SLICE/Libbluray.framework/Headers/* $out/include/bluray/
       fi
 
-      # 3. 生成 pkg-config 文件（注意 $${...} 是 Nix 转义，保留为 ${...}）
+      # 3. 生成 pkg-config 文件（用 Nix 的 ''''${ 转义生成 ${ 字面量）
       mkdir -p $out/lib/pkgconfig
       cat > $out/lib/pkgconfig/libbluray.pc <<'EOF'
-prefix=$${pcfiledir}/../..
-exec_prefix=$${prefix}
-libdir=$${prefix}
-includedir=$${prefix}/include
+prefix=''${pcfiledir}/../..
+exec_prefix=''${prefix}
+libdir=''${prefix}
+includedir=''${prefix}/include
 
 Name: libbluray
 Description: Blu-ray disc playback library
 Version: 1.3.4
-Libs: -F$${prefix} -framework Libbluray
-Cflags: -F$${prefix} -I$${includedir}
+Libs: -F''${prefix} -framework Libbluray
+Cflags: -F''${prefix} -I''${includedir}
 EOF
     '';
     installPhase = "true";
