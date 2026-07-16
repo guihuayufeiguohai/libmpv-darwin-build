@@ -96,6 +96,10 @@ Version: 1.3.4
 Libs: -F$out -framework Libbluray
 Cflags: -F$out -I$out/include
 EOF
+
+# 调试：列出 framework 目录结构
+    echo "Contents of Libbluray.framework:"
+    ls -R $out/Libbluray.framework
   '';
   installPhase = "true";
 };
@@ -117,6 +121,8 @@ pkgs.stdenvNoCC.mkDerivation {
     ];
   configurePhase = ''
   export PKG_CONFIG_PATH="${libbluray-framework}/lib/pkgconfig:$PKG_CONFIG_PATH"
+# 手动添加 framework 链接标志（双保险）
+    export LDFLAGS="-F${libbluray-framework} -framework Libbluray $LDFLAGS"
     DISABLE_ALL_OPTIONS=(
       `# booleans`
       -Dgpl=false `# GPL (version 2 or later) build`
