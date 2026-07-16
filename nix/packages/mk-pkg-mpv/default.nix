@@ -62,6 +62,21 @@ let
     src = patchedSource;
     inherit nativeBuildInputs;
   };
+  libbluray-framework = pkgs.stdenvNoCC.mkDerivation {
+  name = "libbluray-framework-${os}-${arch}";
+  src = ../../../Frameworks/Libbluray.xcframework;
+  buildPhase = ''
+    # DEBUG: echo "os=${os} arch=${arch}"  # 可以先开启调试
+    case "${os}-${arch}" in
+      ios-arm64)           SLICE="ios-arm64" ;;
+      ios-x86_64|ios-arm64_x86_64) SLICE="ios-arm64_x86_64-simulator" ;;
+      *) echo "Unknown slice"; exit 1 ;;
+    esac
+    mkdir -p $out
+    cp -R $SLICE/Libbluray.framework $out/Libbluray.framework
+  '';
+  installPhase = "true";
+};
 in
 
 pkgs.stdenvNoCC.mkDerivation {
@@ -73,7 +88,7 @@ pkgs.stdenvNoCC.mkDerivation {
   enableParallelBuilding = true;
   inherit nativeBuildInputs;
   buildInputs =
-    [ ffmpeg ]
+    [ ffmpeg libbluray-framework ]
     ++ pkgs.lib.optionals (variant == "video") [
       uchardet
       libass
@@ -98,7 +113,7 @@ pkgs.stdenvNoCC.mkDerivation {
       -Dlcms2=disabled `# LCMS2 support`
       -Dlibarchive=disabled `# libarchive wrapper for reading zip files and more`
       -Dlibavdevice=disabled `# libavdevice`
-      -Dlibbluray=disabled `# Bluray support`
+      -Dlibbluray=enabled `# Bluray support`
       -Dlua=disabled `# Lua`
       -Dpthread-debug=disabled `# pthread runtime debugging wrappers`
       -Drubberband=disabled `# librubberband support`
@@ -257,6 +272,9 @@ pkgs.stdenvNoCC.mkDerivation {
         OPTIONS+=("''${IOS_VIDEO_OPTIONS[@]}")
       fi
     fi
+
+    export CFLAGS="$CFLAGS -F${libbluray-framework}"
+    export LDFLAGS="$LDFLAGS -F${libbluray-framework} -framework Libbluray"
 
     meson setup build $src \
       --native-file ${nativeFile} \
