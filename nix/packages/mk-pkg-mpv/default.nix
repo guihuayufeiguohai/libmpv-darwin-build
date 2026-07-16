@@ -116,6 +116,7 @@ pkgs.stdenvNoCC.mkDerivation {
       libass
     ];
   configurePhase = ''
+  export PKG_CONFIG_PATH="${libbluray-framework}/lib/pkgconfig:$PKG_CONFIG_PATH"
     DISABLE_ALL_OPTIONS=(
       `# booleans`
       -Dgpl=false `# GPL (version 2 or later) build`
@@ -295,19 +296,10 @@ pkgs.stdenvNoCC.mkDerivation {
       fi
     fi
 
-    # ---- 新增：让 Meson 交叉编译时找到 libbluray ----
-    cat > "$TMPDIR/cross-libbluray.ini" <<CROSS_EOF
-[properties]
-pkg_config_libdir = '${libbluray-framework}/lib/pkgconfig'
-CROSS_EOF
-
-    #export CFLAGS="$CFLAGS -F${libbluray-framework}"
-    #export LDFLAGS="$LDFLAGS -F${libbluray-framework} -framework Libbluray"
 
     meson setup build $src \
       --native-file ${nativeFile} \
       --cross-file ${crossFile} \
-      --cross-file "$TMPDIR/cross-libbluray.ini" \
       --prefix=$out \
       "''${OPTIONS[@]}" |
       tee configure.log
