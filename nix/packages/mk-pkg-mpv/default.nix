@@ -63,6 +63,7 @@ let
     inherit nativeBuildInputs;
   };
 
+  # ---------- 新增：封装 Libbluray.xcframework ----------
   libbluray-framework = pkgs.stdenvNoCC.mkDerivation {
     name = "libbluray-framework-${os}-${arch}";
     src = ../../../Frameworks/Libbluray.xcframework;
@@ -74,18 +75,17 @@ let
         *) echo "FATAL: Unknown slice for ${os}-${arch}"; exit 1 ;;
       esac
 
-      # 1. 复制整个 .framework
       mkdir -p $out
       cp -R $src/$SLICE/Libbluray.framework $out/Libbluray.framework
       chmod -R +w $out/Libbluray.framework
 
-      # 2. 提取头文件
+      # 头文件
       mkdir -p $out/include/bluray
       if [ -d $src/$SLICE/Libbluray.framework/Headers ]; then
         cp -R $src/$SLICE/Libbluray.framework/Headers/* $out/include/bluray/
       fi
 
-      # 3. 生成 pkg-config 文件（用 Nix 的 ''''${ 转义生成 ${ 字面量）
+      # 生成 pkg-config 文件（注意 Nix 转义：''${ 输出 ${ 字面量）
       mkdir -p $out/lib/pkgconfig
       cat > $out/lib/pkgconfig/libbluray.pc <<'EOF'
 prefix=''${pcfiledir}/../..
@@ -102,6 +102,8 @@ EOF
     '';
     installPhase = "true";
   };
+  # -------------------------------------------------------
+
 in
 
 pkgs.stdenvNoCC.mkDerivation {
@@ -112,12 +114,15 @@ pkgs.stdenvNoCC.mkDerivation {
   dontUnpack = true;
   enableParallelBuilding = true;
   inherit nativeBuildInputs;
+
+  # ---------- 修改：加入 libbluray-framework ----------
   buildInputs =
     [ ffmpeg libbluray-framework ]
     ++ pkgs.lib.optionals (variant == "video") [
       uchardet
       libass
     ];
+
   configurePhase = ''
     DISABLE_ALL_OPTIONS=(
       `# booleans`
@@ -138,7 +143,7 @@ pkgs.stdenvNoCC.mkDerivation {
       -Dlcms2=disabled `# LCMS2 support`
       -Dlibarchive=disabled `# libarchive wrapper for reading zip files and more`
       -Dlibavdevice=disabled `# libavdevice`
-      -Dlibbluray=enabled `# Bluray support`
+      -Dlibbluray=enabled `# Bluray support`        # <-- 改为 enabled
       -Dlua=disabled `# Lua`
       -Dpthread-debug=disabled `# pthread runtime debugging wrappers`
       -Drubberband=disabled `# librubberband support`
@@ -298,13 +303,12 @@ pkgs.stdenvNoCC.mkDerivation {
       fi
     fi
 
-    # 生成额外交叉文件，让 Meson 交叉编译时找到 .pc
+    # ---- 新增：让 Meson 交叉编译时找到 libbluray ----
     cat > "$TMPDIR/cross-libbluray.ini" <<CROSS_EOF
 [properties]
 pkg_config_libdir = '${libbluray-framework}/lib/pkgconfig'
 CROSS_EOF
 
-    # 设置编译链接标志
     export CFLAGS="$CFLAGS -F${libbluray-framework}"
     export LDFLAGS="$LDFLAGS -F${libbluray-framework} -framework Libbluray"
 
@@ -316,6 +320,7 @@ CROSS_EOF
       "''${OPTIONS[@]}" |
       tee configure.log
   '';
+
   buildPhase = ''
     meson compile -vC build
   '';
