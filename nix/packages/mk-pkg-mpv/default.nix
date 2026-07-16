@@ -82,8 +82,8 @@ let
       cp -R $src/$SLICE/Libbluray.framework/Headers/* $out/include/bluray/
     fi
 
-    mkdir -p $out/lib/pkgconfig
-    # 关键：使用 <<EOF，让 Shell 把 $out 替换为 /nix/store/... 绝对路径
+        mkdir -p $out/lib/pkgconfig
+    # 注意：用 <<EOF 而不是 <<'EOF'，这样 shell 会把 $out 替换成绝对路径
     cat > $out/lib/pkgconfig/libbluray.pc <<EOF
 prefix=$out
 exec_prefix=$out
