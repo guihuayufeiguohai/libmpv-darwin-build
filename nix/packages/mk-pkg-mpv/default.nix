@@ -74,30 +74,30 @@ let
         *) echo "FATAL: Unknown slice for ${os}-${arch}"; exit 1 ;;
       esac
 
-      # 1. 复制整个 .framework 到输出目录
+      # 1. 复制整个 .framework
       mkdir -p $out
       cp -R $src/$SLICE/Libbluray.framework $out/Libbluray.framework
       chmod -R +w $out/Libbluray.framework
 
-      # 2. 提取头文件（meson 需要验证头文件存在）
+      # 2. 提取头文件
       mkdir -p $out/include/bluray
       if [ -d $src/$SLICE/Libbluray.framework/Headers ]; then
         cp -R $src/$SLICE/Libbluray.framework/Headers/* $out/include/bluray/
       fi
 
-      # 3. 生成 pkg-config 文件
+      # 3. 生成 pkg-config 文件（注意 $${...} 是 Nix 转义，保留为 ${...}）
       mkdir -p $out/lib/pkgconfig
       cat > $out/lib/pkgconfig/libbluray.pc <<'EOF'
-prefix=${pcfiledir}/../..
-exec_prefix=${prefix}
-libdir=${prefix}
-includedir=${prefix}/include
+prefix=$${pcfiledir}/../..
+exec_prefix=$${prefix}
+libdir=$${prefix}
+includedir=$${prefix}/include
 
 Name: libbluray
 Description: Blu-ray disc playback library
 Version: 1.3.4
-Libs: -F${prefix} -framework Libbluray
-Cflags: -F${prefix} -I${includedir}
+Libs: -F$${prefix} -framework Libbluray
+Cflags: -F$${prefix} -I$${includedir}
 EOF
     '';
     installPhase = "true";
@@ -298,13 +298,13 @@ pkgs.stdenvNoCC.mkDerivation {
       fi
     fi
 
-    # 1. 生成额外的交叉文件，强制 meson 在交叉编译时找到我们的 .pc 文件
+    # 生成额外交叉文件，让 Meson 交叉编译时找到 .pc
     cat > "$TMPDIR/cross-libbluray.ini" <<CROSS_EOF
 [properties]
 pkg_config_libdir = '${libbluray-framework}/lib/pkgconfig'
 CROSS_EOF
 
-    # 2. 设置编译与链接标志
+    # 设置编译链接标志
     export CFLAGS="$CFLAGS -F${libbluray-framework}"
     export LDFLAGS="$LDFLAGS -F${libbluray-framework} -framework Libbluray"
 
