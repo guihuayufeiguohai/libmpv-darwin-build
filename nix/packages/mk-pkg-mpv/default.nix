@@ -62,48 +62,6 @@ let
     src = patchedSource;
     inherit nativeBuildInputs;
   };
-
-  # ---------- 新增：封装 Libbluray.xcframework ----------
-  libbluray-framework = pkgs.stdenvNoCC.mkDerivation {
-    name = "libbluray-framework-${os}-${arch}";
-    src = ../../../Frameworks/Libbluray.xcframework;
-    buildPhase = ''
-      case "${os}-${arch}" in
-        ios-arm64)                SLICE="ios-arm64" ;;
-        iossimulator-*)           SLICE="ios-arm64_x86_64-simulator" ;;
-        macos-*)                  SLICE="macos-arm64_x86_64" ;;
-        *) echo "FATAL: Unknown slice for ${os}-${arch}"; exit 1 ;;
-      esac
-
-      mkdir -p $out
-      cp -R $src/$SLICE/Libbluray.framework $out/Libbluray.framework
-      chmod -R +w $out/Libbluray.framework
-
-      # 头文件
-      mkdir -p $out/include/bluray
-      if [ -d $src/$SLICE/Libbluray.framework/Headers ]; then
-        cp -R $src/$SLICE/Libbluray.framework/Headers/* $out/include/bluray/
-      fi
-
-      # 生成 pkg-config 文件（注意 Nix 转义：''${ 输出 ${ 字面量）
-      mkdir -p $out/lib/pkgconfig
-      cat > $out/lib/pkgconfig/libbluray.pc <<'EOF'
-prefix=''${pcfiledir}/../..
-exec_prefix=''${prefix}
-libdir=''${prefix}
-includedir=''${prefix}/include
-
-Name: libbluray
-Description: Blu-ray disc playback library
-Version: 1.3.4
-Libs: -F''${prefix} -framework Libbluray
-Cflags: -F''${prefix} -I''${includedir}
-EOF
-    '';
-    installPhase = "true";
-  };
-  # -------------------------------------------------------
-
 in
 
 pkgs.stdenvNoCC.mkDerivation {
@@ -114,15 +72,12 @@ pkgs.stdenvNoCC.mkDerivation {
   dontUnpack = true;
   enableParallelBuilding = true;
   inherit nativeBuildInputs;
-
-  # ---------- 修改：加入 libbluray-framework ----------
   buildInputs =
-    [ ffmpeg libbluray-framework ]
+    [ ffmpeg ]
     ++ pkgs.lib.optionals (variant == "video") [
       uchardet
       libass
     ];
-
   configurePhase = ''
     DISABLE_ALL_OPTIONS=(
       `# booleans`
@@ -143,7 +98,7 @@ pkgs.stdenvNoCC.mkDerivation {
       -Dlcms2=disabled `# LCMS2 support`
       -Dlibarchive=disabled `# libarchive wrapper for reading zip files and more`
       -Dlibavdevice=disabled `# libavdevice`
-      -Dlibbluray=enabled `# Bluray support`        # <-- 改为 enabled
+      -Dlibbluray=disabled `# Bluray support`
       -Dlua=disabled `# Lua`
       -Dpthread-debug=disabled `# pthread runtime debugging wrappers`
       -Drubberband=disabled `# librubberband support`
@@ -303,24 +258,13 @@ pkgs.stdenvNoCC.mkDerivation {
       fi
     fi
 
-    # ---- 新增：让 Meson 交叉编译时找到 libbluray ----
-    cat > "$TMPDIR/cross-libbluray.ini" <<CROSS_EOF
-[properties]
-pkg_config_libdir = '${libbluray-framework}/lib/pkgconfig'
-CROSS_EOF
-
-    export CFLAGS="$CFLAGS -F${libbluray-framework}"
-    export LDFLAGS="$LDFLAGS -F${libbluray-framework} -framework Libbluray"
-
     meson setup build $src \
       --native-file ${nativeFile} \
       --cross-file ${crossFile} \
-      --cross-file "$TMPDIR/cross-libbluray.ini" \
       --prefix=$out \
       "''${OPTIONS[@]}" |
       tee configure.log
   '';
-
   buildPhase = ''
     meson compile -vC build
   '';
