@@ -109,7 +109,7 @@ pkgs.stdenvNoCC.mkDerivation {
   enableParallelBuilding = true;
   inherit nativeBuildInputs;
   buildInputs =
-    [ ffmpeg libbluray-framework ]]
+    [ ffmpeg libbluray-framework ]
     ++ pkgs.lib.optionals (variant == "video") [
       uchardet
       libass
