@@ -22,55 +22,42 @@ pkgs.stdenvNoCC.mkDerivation {
   dontConfigure = true;
   dontBuild = true;
 
-  installPhase = ''
-    mkdir -p $out/include $out/lib
-    root="$sourceRoot/Libbluray.xcframework"
+ installPhase = ''
+    mkdir -p $out/include/bluray $out/lib
 
     case ${os} in
       macos)
-        # macos-arm64_x86_64 是 fat (arm64+x86_64)，universal 一档
-        bundle="$root/macos-arm64_x86_64/Libbluray.framework"
+        bundle="./macos-arm64_x86_64/Libbluray.framework"
         ;;
 
       ios)
-        # ios 只有 arm64 真机，arch 参数这里其实恒为 arm64，但留个 case 防以后
+        # ios 只有 arm64 真机
         if [[ "${arch}" != "arm64" && "${arch}" != "universal" ]]; then
           echo "ios only supports arm64, got ${arch}" >&2
           exit 1
         fi
-        bundle="$root/ios-arm64/Libbluray.framework"
+        bundle="./ios-arm64/Libbluray.framework"
         ;;
 
       iossimulator)
-        # ⚠️ mpvkit 1.3.4 zip 里**没有** simulator 切片，这里先 placeholder
-        # 如果你换了带 sim 的版本（比如自己编的 / libbluray-build 1.4.1+），
-        # 按 arch 分流：
-        #   arm64     → ios-arm64-simulator 或 ios-arm64_x86_64-simulator 里拆 thin
-        #   amd64     → ios-arm64_x86_64-simulator 里拆 thin x86_64
-        #   universal → ios-arm64_x86_64-simulator 直接用 fat
-        case ${arch} in
-          arm64)
-            bundle="$root/ios-arm64-simulator/Libbluray.framework"      # 新命名（Xcode 15+）
-            # bundle="$root/ios-arm64_x86_64-simulator/Libbluray.framework"  # 旧命名 fat
-            ;;
-          amd64)
-            bundle="$root/ios-arm64_x86_64-simulator/Libbluray.framework"
-            ;;
-          universal)
-            bundle="$root/ios-arm64_x86_64-simulator/Libbluray.framework"
-            ;;
-        esac
-        # 如果 zip 里没这档，下面 cp 会 fail，故意的——让你早点发现
-        ;;
-
-      *)
-        echo "unsupported os: ${os}" >&2
+        # ⚠️ mpvkit 1.3.4 zip 里**没有** simulator 切片，先报错说明
+        echo "==================================================" >&2
+        echo "libbluray 1.3.4 xcframework has no iossimulator slice" >&2
+        echo "either:" >&2
+        echo "  1. skip libbluray for iossimulator (recommended)" >&2
+        echo "  2. use a newer libbluray-build that includes sim" >&2
+        echo "==================================================" >&2
         exit 1
         ;;
     esac
 
     echo "using bundle: $bundle"
-    cp -r "$bundle/Headers/bluray" "$out/include/bluray"
+
+    # Headers 是平铺的 .h，不是 bluray/ 子目录
+    # mpv 源码里 #include <bluray/bluray.h>，所以目标要建成 $out/include/bluray/
+    cp "$bundle/Headers/"*.h "$out/include/bluray/"
+
+    # 无后缀的 Libbluray 就是静态库，重命名为 libbluray.a
     cp "$bundle/Libbluray" "$out/lib/libbluray.a"
   '';
 }
