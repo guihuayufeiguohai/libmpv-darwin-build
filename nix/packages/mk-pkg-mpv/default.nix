@@ -66,14 +66,28 @@ let
   name = "libbluray-framework-${os}-${arch}";
   src = ../../../Frameworks/Libbluray.xcframework;
   buildPhase = ''
-    # DEBUG: echo "os=${os} arch=${arch}"  # 可以先开启调试
     case "${os}-${arch}" in
-      ios-arm64)           SLICE="ios-arm64" ;;
-      ios-x86_64|ios-arm64_x86_64) SLICE="ios-arm64_x86_64-simulator" ;;
-      *) echo "Unknown slice"; exit 1 ;;
+      ios-arm64)
+        SLICE="ios-arm64"
+        ;;
+      iossimulator-*)
+        # 模拟器的 os 是 iossimulator，arch 可能是 amd64 或 arm64
+        # 用双架构切片即可
+        SLICE="ios-arm64_x86_64-simulator"
+        ;;
+      macos-*)
+        # macOS 也是双架构切片，无论目标架构是 arm64 还是 amd64，链接器自己会选
+        SLICE="macos-arm64_x86_64"
+        ;;
+      *)
+        echo "Unknown slice: ${os}-${arch}"
+        exit 1
+        ;;
     esac
+
     mkdir -p $out
-    cp -R $SLICE/Libbluray.framework $out/Libbluray.framework
+    cp -R $src/$SLICE/Libbluray.framework $out/Libbluray.framework
+    chmod -R +w $out/Libbluray.framework
   '';
   installPhase = "true";
 };
