@@ -213,6 +213,9 @@ pkgs.stdenvNoCC.mkDerivation {
       `# video output features`
       -Dgl=enabled `# OpenGL context support`
       -Dplain-gl=enabled `# OpenGL without platform-specific code (e.g. for libmpv)`
+
+      `# Bluray support`
+      -Dlibbluray=enabled
     )
 
     MACOS_OPTIONS=(
@@ -229,9 +232,6 @@ pkgs.stdenvNoCC.mkDerivation {
 
       `# hwaccel features`
       -Dvideotoolbox-gl=enabled `# Videotoolbox with OpenGL`
-
-      `# Bluray support`
-      -Dlibbluray=enabled
     )
 
     IOS_OPTIONS=(
@@ -242,9 +242,6 @@ pkgs.stdenvNoCC.mkDerivation {
     IOS_VIDEO_OPTIONS=(
       `# hwaccel features`
       -Dios-gl=enabled `# iOS OpenGL ES hardware decoding interop support`
-
-    `# Bluray support`
-      -Dlibbluray=enabled
     )
 
     OPTIONS=("''${DISABLE_ALL_OPTIONS[@]}")
