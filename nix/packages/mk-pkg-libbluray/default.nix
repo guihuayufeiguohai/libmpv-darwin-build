@@ -7,13 +7,14 @@ let
   name = "libbluray";
   packageLock = {
     version = "1.4.0-ci-fix";
-    url = "https://github.com/mpvkit/libbluray-build/releases/download/1.4.0/Libbluray.xcframework.zip";
-    sha256 = "bc037d34e2b0b5ab7f202fb371f5fb298136cc66fdf406c2172185d06f53f18d"; # nix-prefetch-url
+    # url = "https://github.com/mpvkit/libbluray-build/releases/download/1.4.0/Libbluray.xcframework.zip";
+    # sha256 = "bc037d34e2b0b5ab7f202fb371f5fb298136cc66fdf406c2172185d06f53f18d"; # nix-prefetch-url
   };
   inherit (packageLock) version;
   callPackage = pkgs.lib.callPackageWith { inherit pkgs os arch variant; };
   pname = import ../../utils/name/package.nix name;
-  src = pkgs.fetchurl { inherit (packageLock) url sha256; };
+  src = ../../../Frameworks/Libbluray.xcframework.zip;
+  # src = pkgs.fetchurl { inherit (packageLock) url sha256; };
 in
 pkgs.stdenvNoCC.mkDerivation {
   name = "${pname}-${os}-${arch}-${variant}-${version}";
@@ -40,8 +41,11 @@ pkgs.stdenvNoCC.mkDerivation {
       bundle="./ios-arm64/Libbluray.framework"
       ;;
     iossimulator)
-      bundle="./ios-arm64/Libbluray.framework"
-      ;;
+    bundle="./ios-arm64_x86_64-simulator/Libbluray.framework"
+    ;;
+  maccatalyst)  # 以防万一你将来需要
+    bundle="./ios-arm64_x86_64-maccatalyst/Libbluray.framework"
+    ;;
   esac
 
   # 复制头文件
