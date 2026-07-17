@@ -78,8 +78,7 @@ pkgs.stdenvNoCC.mkDerivation {
     ++ pkgs.lib.optionals (variant == "video") [
       uchardet
       libass
-    ] ++ pkgs.lib.optionals (variant == "video" && os != "iossimulator") [
-    libbluray
+      libbluray
     ];
   configurePhase = ''
     DISABLE_ALL_OPTIONS=(
