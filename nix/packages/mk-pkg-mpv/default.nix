@@ -84,6 +84,7 @@ pkgs.stdenvNoCC.mkDerivation {
       uchardet
       libass
       libbluray
+      pkgs.curl
     ];
   configurePhase = ''
     DISABLE_ALL_OPTIONS=(
