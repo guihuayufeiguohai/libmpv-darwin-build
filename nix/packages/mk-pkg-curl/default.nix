@@ -26,7 +26,7 @@ let
   };
 
   targetStdenv =
-    if os == "mac" then pkgs.stdenv
+    if os == "macos" then pkgs.stdenv
     else if os == "ios" then pkgs.pkgsCross.iphoneos.stdenv
     else if os == "iossimulator" then pkgs.pkgsCross.iphonesimulator.stdenv
     else throw "mk-pkg-curl: unsupported os=${os}";
