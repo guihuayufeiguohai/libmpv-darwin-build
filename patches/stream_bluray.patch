@@ -1,5 +1,5 @@
---- mpv/mpv-0.36.0-original/stream/stream_bluray.c	2026-07-15 18:34:51
-+++ mpv/mpv-0.36.0-modified/stream/stream_bluray.c	2026-07-19 17:36:14
+--- mpv-0.36.0-original/stream/stream_bluray.c	2026-07-15 18:34:51
++++ mpv-0.36.0-modified/stream/stream_bluray.c	2026-07-19 17:36:14
 @@ -50,6 +50,8 @@
  #include "sub/img_convert.h"
  #include "video/mp_image.h"

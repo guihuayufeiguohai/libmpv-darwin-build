@@ -1,5 +1,5 @@
---- mpv/mpv-0.36.0-original/stream/http_udf_fs.c	1970-01-01 08:00:00
-+++ mpv/mpv-0.36.0-modified/stream/http_udf_fs.c	2026-07-19 17:21:18
+--- mpv-0.36.0-original/stream/http_udf_fs.c	1970-01-01 08:00:00
++++ mpv-0.36.0-modified/stream/http_udf_fs.c	2026-07-19 17:21:18
 @@ -0,0 +1,186 @@
 +#include "http_udf_fs.h"
 +#include <stdlib.h>

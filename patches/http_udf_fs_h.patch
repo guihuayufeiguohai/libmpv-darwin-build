@@ -1,5 +1,5 @@
---- mpv/mpv-0.36.0-original/stream/http_udf_fs.h	1970-01-01 08:00:00
-+++ mpv/mpv-0.36.0-modified/stream/http_udf_fs.h	2026-07-19 17:20:52
+--- mpv-0.36.0-original/stream/http_udf_fs.h	1970-01-01 08:00:00
++++ mpv-0.36.0-modified/stream/http_udf_fs.h	2026-07-19 17:20:52
 @@ -0,0 +1,44 @@
 +/*
 + * HTTP UDF Filesystem for libbluray remote playback
