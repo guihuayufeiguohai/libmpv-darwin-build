@@ -86,8 +86,11 @@ pkgs.stdenvNoCC.mkDerivation {
       libass
       libbluray
       ]
-    ++ pkgs.lib.optionals (variant == "video" && os != "iossimulator") [
+    ++ pkgs.lib.optionals (variant == "video" && os == "ios") [
       curl
+    ]
+    ++ pkgs.lib.optionals (variant == "video" && os == "macos") [
+      pkgs.curl
     ];
   configurePhase = ''
     DISABLE_ALL_OPTIONS=(
