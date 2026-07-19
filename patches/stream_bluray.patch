@@ -1,0 +1,101 @@
+--- mpv/mpv-0.36.0-original/stream/stream_bluray.c	2026-07-15 18:34:51
++++ mpv/mpv-0.36.0-modified/stream/stream_bluray.c	2026-07-19 17:36:14
+@@ -50,6 +50,8 @@
+ #include "sub/img_convert.h"
+ #include "video/mp_image.h"
+ 
++#include "http_udf_fs.h"
++
+ #define BLURAY_SECTOR_SIZE     6144
+ 
+ #define BLURAY_DEFAULT_ANGLE      0
+@@ -86,6 +88,9 @@
+     char *cfg_device;
+ 
+     bool use_nav;
++
++    void *remote_fs_ctx;   // 远程蓝光上下文
++    char *remote_device;   // 保存远程 URL（用于析构时释放）
+ };
+ 
+ static void destruct(struct bluray_priv_s *priv)
+@@ -105,9 +110,27 @@
+     return bd_select_title(priv->bd, title);
+ }
+ 
+-static void bluray_stream_close(stream_t *s)
+-{
+-    destruct(s->priv);
++// static void bluray_stream_close(stream_t *s)
++// {
++//     destruct(s->priv);
++// }
++
++static void bluray_stream_close(stream_t *s) {
++    struct bluray_priv_s *priv = s->priv;
++    if (!priv) return;
++
++    // 清理远程文件系统
++    if (priv->remote_fs_ctx) {
++        http_udf_fs_destroy(priv->remote_fs_ctx);
++        priv->remote_fs_ctx = NULL;
++    }
++    talloc_free(priv->remote_device);
++
++    // 原有清理代码...
++    if (priv->title_info)
++        bd_free_title_info(priv->title_info);
++    if (priv->bd)
++        bd_close(priv->bd);
+ }
+ 
+ static void handle_event(stream_t *s, const BD_EVENT *ev)
+@@ -390,12 +413,44 @@
+         bd_set_debug_mask(0);
+ 
+     /* open device */
+-    BLURAY *bd = bd_open(device, NULL);
+-    if (!bd) {
+-        MP_ERR(s, "Couldn't open Blu-ray device: %s\n", device);
+-        return STREAM_UNSUPPORTED;
++    char *device_tmp = mp_get_user_path(NULL, s->global, device);
++    BLURAY *bd = NULL;
++
++        if (strncmp(device_tmp, "http://", 7) == 0 || strncmp(device_tmp, "https://", 8) == 0) {
++        // 远程蓝光
++        void *fs_ctx = http_udf_fs_init(device_tmp);
++        if (!fs_ctx) {
++            MP_ERR(s, "Failed to initialize remote Blu-ray filesystem.\n");
++            talloc_free(device_tmp);
++            return STREAM_UNSUPPORTED;
++        }
++        b->remote_fs_ctx = fs_ctx;
++        b->remote_device = talloc_strdup(b, device_tmp);
++        bd = bd_open_files(http_udf_file_open, http_udf_dir_open, fs_ctx);
++        if (!bd) {
++            MP_ERR(s, "Couldn't open remote Blu-ray via bd_open_files.\n");
++            http_udf_fs_destroy(fs_ctx);
++            b->remote_fs_ctx = NULL;
++            talloc_free(device_tmp);
++            return STREAM_UNSUPPORTED;
++        }
++    } else {
++        // 本地蓝光
++        bd = bd_open(device_tmp, NULL);
++        if (!bd) {
++            MP_ERR(s, "Couldn't open Blu-ray device: %s\n", device);
++            talloc_free(device_tmp);
++            return STREAM_UNSUPPORTED;
++        }
+     }
++    talloc_free(device_tmp);
+     b->bd = bd;
++    // BLURAY *bd = bd_open(device, NULL);
++    // if (!bd) {
++    //     MP_ERR(s, "Couldn't open Blu-ray device: %s\n", device);
++    //     return STREAM_UNSUPPORTED;
++    // }
++    // b->bd = bd;
+ 
+     if (!check_disc_info(s)) {
+         destruct(b);

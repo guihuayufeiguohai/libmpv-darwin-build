@@ -1,0 +1,48 @@
+--- mpv/mpv-0.36.0-original/stream/http_udf_fs.h	1970-01-01 08:00:00
++++ mpv/mpv-0.36.0-modified/stream/http_udf_fs.h	2026-07-19 17:20:52
+@@ -0,0 +1,44 @@
++/*
++ * HTTP UDF Filesystem for libbluray remote playback
++ * 
++ * Provides virtual BDMV directory and file access over HTTP Range requests.
++ */
++
++#ifndef MPV_HTTP_UDF_FS_H
++#define MPV_HTTP_UDF_FS_H
++
++#include <libbluray/filesystem.h>  // BD_FILE_H, BD_DIR_H, BD_FILE_OPEN, BD_DIR_OPEN
++
++/**
++ * Initialize the remote filesystem.
++ * Parses UDF from the given ISO URL and builds a file tree.
++ * 
++ * @param iso_url  URL of the remote Blu-ray ISO (e.g., "https://example.com/movie.iso")
++ * @return         Opaque context pointer for use with bd_open_files, or NULL on error.
++ */
++void *http_udf_fs_init(const char *iso_url);
++
++/**
++ * Destroy the filesystem context and free all resources.
++ * 
++ * @param ctx  Context returned by http_udf_fs_init()
++ */
++void http_udf_fs_destroy(void *ctx);
++
++/**
++ * @brief Get the file-open callback for bd_open_files().
++ * 
++ * This function is passed as the first argument to bd_open_files().
++ * It must match the signature: BD_FILE_H* (*)(const char* filename, const char* mode)
++ */
++BD_FILE_H *http_udf_file_open(const char *filename, const char *mode);
++
++/**
++ * @brief Get the directory-open callback for bd_open_files().
++ * 
++ * This function is passed as the second argument to bd_open_files().
++ * It must match the signature: BD_DIR_H* (*)(const char* dirname)
++ */
++BD_DIR_H *http_udf_dir_open(const char *dirname);
++
++#endif /* MPV_HTTP_UDF_FS_H */
+\ No newline at end of file
