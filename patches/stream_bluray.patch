@@ -1,5 +1,5 @@
 --- mpv-0.36.0-original/stream/stream_bluray.c	2026-07-15 18:34:51
-+++ mpv-0.36.0-modified/stream/stream_bluray.c	2026-07-19 20:41:53
++++ mpv-0.36.0-modified/stream/stream_bluray.c	2026-07-19 20:55:33
 @@ -50,6 +50,10 @@
  #include "sub/img_convert.h"
  #include "video/mp_image.h"
@@ -52,7 +52,7 @@
  }
  
  static void handle_event(stream_t *s, const BD_EVENT *ev)
-@@ -390,12 +415,45 @@
+@@ -390,12 +415,58 @@
          bd_set_debug_mask(0);
  
      /* open device */
@@ -73,9 +73,22 @@
 +        }
 +        b->remote_fs_ctx = fs_ctx;
 +        b->remote_device = talloc_strdup(b, device_tmp);
-+        bd = bd_open_files(NULL, fs_ctx, http_udf_dir_open, http_udf_file_open);
++
++        // 创建空的 BLURAY 句柄
++        bd = bd_init();
 +        if (!bd) {
++            MP_ERR(s, "bd_init() failed.\n");
++            http_udf_fs_destroy(fs_ctx);
++            b->remote_fs_ctx = NULL;
++            talloc_free(device_tmp);
++            return STREAM_UNSUPPORTED;
++        }
++
++        // 设置虚拟文件系统
++        int ret = bd_open_files(bd, fs_ctx, http_udf_dir_open, http_udf_file_open);
++        if (ret != 0) {
 +            MP_ERR(s, "Couldn't open remote Blu-ray via bd_open_files.\n");
++            bd_close(bd);
 +            http_udf_fs_destroy(fs_ctx);
 +            b->remote_fs_ctx = NULL;
 +            talloc_free(device_tmp);
