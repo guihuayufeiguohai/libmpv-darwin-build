@@ -27,6 +27,7 @@ let
   uchardet = callPackage ../mk-pkg-uchardet/default.nix { };
   libass = callPackage ../mk-pkg-libass/default.nix { };
   libbluray = callPackage ../mk-pkg-libbluray/default.nix { };
+  curl = callPackage ../mk-pkg-curl/default.nix { };
 
   nativeBuildInputs = [
     pkgs.meson
@@ -84,7 +85,7 @@ pkgs.stdenvNoCC.mkDerivation {
       uchardet
       libass
       libbluray
-      pkgs.curl
+      curl
     ];
   configurePhase = ''
     DISABLE_ALL_OPTIONS=(
