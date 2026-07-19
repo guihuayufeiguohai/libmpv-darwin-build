@@ -25,10 +25,9 @@ let
     # sha256 = "sha256-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx=";
   };
 
-  targetStdenv =
+    targetStdenv =
     if os == "macos" then pkgs.stdenv
-    else if os == "ios" then pkgs.pkgsCross.iphoneos.stdenv
-    else if os == "iossimulator" then pkgs.pkgsCross.iphonesimulator.stdenv
+    else if os == "ios" then pkgs.pkgsCross.iphone64.stdenv
     else throw "mk-pkg-curl: unsupported os=${os}";
 
 in
@@ -44,10 +43,8 @@ targetStdenv.mkDerivation {
     pkgs.pkg-config
   ];
 
-  buildInputs = [
-    pkgs.zlib
-    pkgs.openssl
-  ] ++ pkgs.lib.optional (os != "mac") pkgs.libiconv;
+  buildInputs = [ pkgs.zlib ]
+    ++ pkgs.lib.optional (os != "macos") pkgs.libiconv;
 
   configureFlags = [
     "--with-secure-transport"
@@ -57,7 +54,7 @@ targetStdenv.mkDerivation {
     "--without-nghttp2"
     "--without-brotli"
     "--without-zstd"
-  ] ++ pkgs.lib.optionals (os == "ios" || os == "iossimulator") [
+  ] ++ pkgs.lib.optionals (os == "ios") [
     "--host=${targetStdenv.hostPlatform.config}"
   ];
 
