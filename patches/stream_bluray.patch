@@ -1,15 +1,17 @@
 --- mpv-0.36.0-original/stream/stream_bluray.c	2026-07-15 18:34:51
-+++ mpv-0.36.0-modified/stream/stream_bluray.c	2026-07-19 17:36:14
-@@ -50,6 +50,8 @@
++++ mpv-0.36.0-modified/stream/stream_bluray.c	2026-07-19 19:07:46
+@@ -50,6 +50,10 @@
  #include "sub/img_convert.h"
  #include "video/mp_image.h"
  
++#if HAVE_LIBCURL
 +#include "http_udf_fs.h"
++#endif
 +
  #define BLURAY_SECTOR_SIZE     6144
  
  #define BLURAY_DEFAULT_ANGLE      0
-@@ -86,6 +88,9 @@
+@@ -86,6 +90,9 @@
      char *cfg_device;
  
      bool use_nav;
@@ -19,7 +21,7 @@
  };
  
  static void destruct(struct bluray_priv_s *priv)
-@@ -105,9 +110,27 @@
+@@ -105,9 +112,27 @@
      return bd_select_title(priv->bd, title);
  }
  
@@ -35,14 +37,14 @@
 +    struct bluray_priv_s *priv = s->priv;
 +    if (!priv) return;
 +
-+    // 清理远程文件系统
++#if HAVE_LIBCURL
 +    if (priv->remote_fs_ctx) {
 +        http_udf_fs_destroy(priv->remote_fs_ctx);
 +        priv->remote_fs_ctx = NULL;
 +    }
 +    talloc_free(priv->remote_device);
++#endif
 +
-+    // 原有清理代码...
 +    if (priv->title_info)
 +        bd_free_title_info(priv->title_info);
 +    if (priv->bd)
@@ -50,7 +52,7 @@
  }
  
  static void handle_event(stream_t *s, const BD_EVENT *ev)
-@@ -390,12 +413,44 @@
+@@ -390,12 +415,45 @@
          bd_set_debug_mask(0);
  
      /* open device */
@@ -58,11 +60,11 @@
 -    if (!bd) {
 -        MP_ERR(s, "Couldn't open Blu-ray device: %s\n", device);
 -        return STREAM_UNSUPPORTED;
-+    char *device_tmp = mp_get_user_path(NULL, s->global, device);
++        char *device_tmp = mp_get_user_path(NULL, s->global, device);
 +    BLURAY *bd = NULL;
 +
-+        if (strncmp(device_tmp, "http://", 7) == 0 || strncmp(device_tmp, "https://", 8) == 0) {
-+        // 远程蓝光
++#if HAVE_LIBCURL
++    if (strncmp(device_tmp, "http://", 7) == 0 || strncmp(device_tmp, "https://", 8) == 0) {
 +        void *fs_ctx = http_udf_fs_init(device_tmp);
 +        if (!fs_ctx) {
 +            MP_ERR(s, "Failed to initialize remote Blu-ray filesystem.\n");
@@ -79,8 +81,9 @@
 +            talloc_free(device_tmp);
 +            return STREAM_UNSUPPORTED;
 +        }
-+    } else {
-+        // 本地蓝光
++    } else
++#endif
++    {
 +        bd = bd_open(device_tmp, NULL);
 +        if (!bd) {
 +            MP_ERR(s, "Couldn't open Blu-ray device: %s\n", device);

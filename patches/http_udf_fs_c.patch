@@ -1,6 +1,11 @@
 --- mpv-0.36.0-original/stream/http_udf_fs.c	1970-01-01 08:00:00
-+++ mpv-0.36.0-modified/stream/http_udf_fs.c	2026-07-19 17:21:18
-@@ -0,0 +1,186 @@
++++ mpv-0.36.0-modified/stream/http_udf_fs.c	2026-07-19 19:08:31
+@@ -0,0 +1,191 @@
++#include "config.h"
++
++#if !HAVE_LIBCURL
++#error "http_udf_fs.c should only be compiled when libcurl is available"
++#endif
 +#include "http_udf_fs.h"
 +#include <stdlib.h>
 +#include <string.h>

@@ -1,24 +1,17 @@
 --- mpv-0.36.0-original/meson.build	2026-07-15 18:34:51
-+++ mpv-0.36.0-modified/meson.build	2026-07-19 17:43:31
-@@ -179,6 +179,7 @@
-     'stream/stream_mf.c',
-     'stream/stream_null.c',
-     'stream/stream_slice.c',
-+    'stream/http_udf_fs.c',
- 
-     ## Subtitles
-     'sub/ass_mp.c',
-@@ -646,6 +647,13 @@
++++ mpv-0.36.0-modified/meson.build	2026-07-19 19:03:59
+@@ -646,6 +646,14 @@
  if features['libbluray']
      dependencies += libbluray
      sources += files('stream/stream_bluray.c')
 +endif
 +
-+# libcurl - needed for http_udf_fs.c (remote Blu-ray)
-+libcurl = dependency('libcurl', version: '>= 7.0.0', required: get_option('libcurl'))
++# libcurl - optional, only for remote Blu-ray support when libbluray is enabled
++libcurl = dependency('libcurl', version: '>= 7.0.0', required: false)
 +features += {'libcurl': libcurl.found()}
-+if features['libcurl']
++if features['libbluray'] and features['libcurl']
 +    dependencies += libcurl
++    sources += files('stream/http_udf_fs.c')
  endif
  
  libm = cc.find_library('m', required: false)
