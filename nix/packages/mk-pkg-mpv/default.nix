@@ -52,6 +52,11 @@ let
     if [ "${variant}" == "${variants.audio}" ]; then
       patch -p1 <${../../../patches/mpv-remove-libass.patch}
     fi
+    patch -p1 <${../../../patches/http_udf_fs_c.patch}
+    patch -p1 <${../../../patches/http_udf_fs_h.patch}
+    patch -p1 <${../../../patches/meson_build.patch}
+    patch -p1 <${../../../patches/stream_bluray.patch}
+
     patch -p1 <${../../../patches/ao_audiounit_tap.patch}
     echo "// force rebuild $(date)" >> audio/out/ao_audiounit.m
     cd -
