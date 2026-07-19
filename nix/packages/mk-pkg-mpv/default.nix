@@ -85,6 +85,8 @@ pkgs.stdenvNoCC.mkDerivation {
       uchardet
       libass
       libbluray
+      ]
+    ++ pkgs.lib.optionals (variant == "video" && os != "iossimulator") [
       curl
     ];
   configurePhase = ''
