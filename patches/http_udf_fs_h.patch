@@ -1,5 +1,5 @@
 --- mpv-0.36.0-original/stream/http_udf_fs.h	1970-01-01 08:00:00
-+++ mpv-0.36.0-modified/stream/http_udf_fs.h	2026-07-19 17:20:52
++++ mpv-0.36.0-modified/stream/http_udf_fs.h	2026-07-19 20:39:36
 @@ -0,0 +1,44 @@
 +/*
 + * HTTP UDF Filesystem for libbluray remote playback
@@ -34,7 +34,7 @@
 + * This function is passed as the first argument to bd_open_files().
 + * It must match the signature: BD_FILE_H* (*)(const char* filename, const char* mode)
 + */
-+BD_FILE_H *http_udf_file_open(const char *filename, const char *mode);
++BD_FILE_H *http_udf_file_open(void *handle, const char *filename);
 +
 +/**
 + * @brief Get the directory-open callback for bd_open_files().
@@ -42,7 +42,7 @@
 + * This function is passed as the second argument to bd_open_files().
 + * It must match the signature: BD_DIR_H* (*)(const char* dirname)
 + */
-+BD_DIR_H *http_udf_dir_open(const char *dirname);
++BD_DIR_H *http_udf_dir_open(void *handle, const char *dirname);
 +
 +#endif /* MPV_HTTP_UDF_FS_H */
 \ No newline at end of file

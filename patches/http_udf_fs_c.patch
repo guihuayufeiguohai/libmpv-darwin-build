@@ -1,11 +1,12 @@
 --- mpv-0.36.0-original/stream/http_udf_fs.c	1970-01-01 08:00:00
-+++ mpv-0.36.0-modified/stream/http_udf_fs.c	2026-07-19 19:08:31
-@@ -0,0 +1,191 @@
++++ mpv-0.36.0-modified/stream/http_udf_fs.c	2026-07-19 20:45:49
+@@ -0,0 +1,193 @@
 +#include "config.h"
 +
 +#if !HAVE_LIBCURL
 +#error "http_udf_fs.c should only be compiled when libcurl is available"
 +#endif
++
 +#include "http_udf_fs.h"
 +#include <stdlib.h>
 +#include <string.h>
@@ -26,8 +27,6 @@
 +    fs_node *root;            // 根目录节点（/）
 +    // 可添加缓存等
 +} remote_fs_ctx;
-+
-+static remote_fs_ctx *g_ctx = NULL;   // 全局实例（简化，实际应放在回调参数中）
 +
 +// ------------------- 工具函数 -------------------
 +// 在节点树中根据路径查找节点（需要实现）
@@ -72,6 +71,7 @@
 +// ------------------- 文件操作回调实现 -------------------
 +typedef struct {
 +    BD_FILE_H  base;
++    remote_fs_ctx *ctx;      // 用于访问 iso_url 和文件树
 +    fs_node   *node;
 +    int64_t    position;      // 当前文件内偏移
 +} http_udf_file;
@@ -106,7 +106,8 @@
 +    if (size == 0) return 0;
 +
 +    uint64_t start_byte = f->node->start_sector * 2048ULL + f->position;
-+    int ret = http_read(g_ctx->iso_url, start_byte, (size_t)size, buf);
++    // 使用文件句柄中的上下文获取 iso_url
++    int ret = http_read(f->ctx->iso_url, start_byte, (size_t)size, buf);
 +    if (ret > 0) f->position += ret;
 +    return ret;
 +}
@@ -116,11 +117,12 @@
 +    return -1; // 不支持写入
 +}
 +
-+BD_FILE_H *http_udf_file_open(const char *filename, const char *mode) {
-+    if (!g_ctx || !g_ctx->root) return NULL;
-+    if (mode[0] != 'r') return NULL;   // 只读
++// 文件打开函数
++BD_FILE_H *http_udf_file_open(void *handle, const char *filename) {
++    remote_fs_ctx *ctx = (remote_fs_ctx *)handle;
++    if (!ctx || !ctx->root) return NULL;
 +
-+    fs_node *node = find_node(g_ctx->root, filename);
++    fs_node *node = find_node(ctx->root, filename);
 +    if (!node || node->is_dir) return NULL;
 +
 +    http_udf_file *f = calloc(1, sizeof(http_udf_file));
@@ -130,6 +132,7 @@
 +    f->base.eof   = file_eof;
 +    f->base.read  = file_read;
 +    f->base.write = file_write;
++    f->ctx = ctx;
 +    f->node = node;
 +    f->position = 0;
 +    return (BD_FILE_H *)f;
@@ -156,9 +159,11 @@
 +    return 0;
 +}
 +
-+BD_DIR_H *http_udf_dir_open(const char *dirname) {
-+    if (!g_ctx || !g_ctx->root) return NULL;
-+    fs_node *node = find_node(g_ctx->root, dirname);
++// 目录打开函数
++BD_DIR_H *http_udf_dir_open(void *handle, const char *dirname) {
++    remote_fs_ctx *ctx = (remote_fs_ctx *)handle;
++    if (!ctx || !ctx->root) return NULL;
++    fs_node *node = find_node(ctx->root, dirname);
 +    if (!node || !node->is_dir) return NULL;
 +
 +    http_udf_dir *d = calloc(1, sizeof(http_udf_dir));
@@ -171,16 +176,14 @@
 +
 +// ------------------- 初始化与销毁 -------------------
 +void *http_udf_fs_init(const char *iso_url) {
-+    if (g_ctx) http_udf_fs_destroy(g_ctx);  // 防止重复初始化
-+
 +    remote_fs_ctx *ctx = calloc(1, sizeof(remote_fs_ctx));
++    if (!ctx) return NULL;
 +    ctx->iso_url = strdup(iso_url);
 +    if (parse_udf_from_url(iso_url, &ctx->root) != 0) {
 +        free(ctx->iso_url);
 +        free(ctx);
 +        return NULL;
 +    }
-+    g_ctx = ctx;
 +    return ctx;
 +}
 +
@@ -190,6 +193,5 @@
 +    free(c->iso_url);
 +    // 递归释放文件树（需自行实现）
 +    free(c);
-+    if (g_ctx == c) g_ctx = NULL;
 +}
 \ No newline at end of file

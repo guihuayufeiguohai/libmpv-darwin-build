@@ -1,5 +1,5 @@
 --- mpv-0.36.0-original/stream/stream_bluray.c	2026-07-15 18:34:51
-+++ mpv-0.36.0-modified/stream/stream_bluray.c	2026-07-19 19:07:46
++++ mpv-0.36.0-modified/stream/stream_bluray.c	2026-07-19 20:41:53
 @@ -50,6 +50,10 @@
  #include "sub/img_convert.h"
  #include "video/mp_image.h"
@@ -73,7 +73,7 @@
 +        }
 +        b->remote_fs_ctx = fs_ctx;
 +        b->remote_device = talloc_strdup(b, device_tmp);
-+        bd = bd_open_files(http_udf_file_open, http_udf_dir_open, fs_ctx);
++        bd = bd_open_files(NULL, fs_ctx, http_udf_dir_open, http_udf_file_open);
 +        if (!bd) {
 +            MP_ERR(s, "Couldn't open remote Blu-ray via bd_open_files.\n");
 +            http_udf_fs_destroy(fs_ctx);
