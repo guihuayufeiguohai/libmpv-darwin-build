@@ -27,7 +27,6 @@ let
   uchardet = callPackage ../mk-pkg-uchardet/default.nix { };
   libass = callPackage ../mk-pkg-libass/default.nix { };
   libbluray = callPackage ../mk-pkg-libbluray/default.nix { };
-  curl = callPackage ../mk-pkg-curl/default.nix { };
 
   nativeBuildInputs = [
     pkgs.meson
@@ -53,9 +52,6 @@ let
     if [ "${variant}" == "${variants.audio}" ]; then
       patch -p1 <${../../../patches/mpv-remove-libass.patch}
     fi
-    patch -p1 <${../../../patches/http_udf_fs_c.patch}
-    patch -p1 <${../../../patches/http_udf_fs_h.patch}
-    patch -p1 <${../../../patches/meson_build.patch}
     patch -p1 <${../../../patches/stream_bluray.patch}
 
     patch -p1 <${../../../patches/ao_audiounit_tap.patch}
@@ -85,12 +81,6 @@ pkgs.stdenvNoCC.mkDerivation {
       uchardet
       libass
       libbluray
-      ]
-    ++ pkgs.lib.optionals (variant == "video" && os == "ios") [
-      curl
-    ]
-    ++ pkgs.lib.optionals (variant == "video" && os == "macos") [
-      pkgs.curl
     ];
   configurePhase = ''
     DISABLE_ALL_OPTIONS=(
