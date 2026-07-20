@@ -1,5 +1,5 @@
 --- mpv-0.36.0-original/stream/stream_bluray.c	2026-07-15 18:34:51
-+++ mpv-0.36.0-modified/stream/stream_bluray.c	2026-07-20 12:16:39
++++ mpv-0.36.0-modified/stream/stream_bluray.c	2026-07-20 12:33:05
 @@ -29,6 +29,7 @@
  #include <string.h>
  #include <strings.h>
@@ -9,7 +9,25 @@
  #include <libbluray/bluray.h>
  #include <libbluray/meta_data.h>
 \ No newline at end of file
-@@ -87,12 +88,81 @@
+@@ -50,6 +51,16 @@
+ #include "sub/img_convert.h"
+ #include "video/mp_image.h"
+ 
++/* 如果 libbluray 没有提供 BD_STREAM_INFO，我们自己定义 */
++#ifndef BD_STREAM_INFO
++typedef struct bd_stream_info {
++    void *stream;
++    int (*read)(void *stream, uint8_t *buf, int lba, int num_blocks);
++    int64_t (*seek)(void *stream, int64_t offset, int whence);
++    void (*close)(void *stream);
++} BD_STREAM_INFO;
++#endif
++
+ #define BLURAY_SECTOR_SIZE     6144
+ 
+ #define BLURAY_DEFAULT_ANGLE      0
+\ No newline at end of file
+@@ -87,12 +98,81 @@
  
      bool use_nav;
  };
@@ -54,27 +72,27 @@
 +    struct bluray_priv_s *b = stream->priv;
 +    struct mpv_global *global = stream->global;
 +
++    /* 使用 STREAM_READ 即可，mpv 会根据 URL 自动启用网络能力 */
 +    struct stream *http_stream = stream_create(url,
-+                                STREAM_READ | STREAM_NETWORK_RELIABLE,
++                                STREAM_READ,
 +                                NULL, global);
 +    if (!http_stream)
 +        return STREAM_UNSUPPORTED;
-+
+ 
 +    BD_STREAM_INFO info = {
 +        .stream = http_stream,
 +        .read   = http_read_cb,
 +        .seek   = http_seek_cb,
 +        .close  = http_close_cb,
 +    };
- 
++
 +    BLURAY *bd = bd_open_stream(&info);
 +    if (!bd) {
 +        free_stream(http_stream);
 +        return STREAM_UNSUPPORTED;
 +    }
 +
-+    // 缓存 2048 个扇区 ≈ 4 MB，大幅减少 HTTP Range 请求
-+    bd_set_cache_size(bd, 2048);
++    /* 缓存功能不可用，移除了 bd_set_cache_size 调用 */
 +    b->bd = bd;
 +
 +    MP_VERBOSE(stream, "Opened Blu-ray over HTTP: %s\n", url);
@@ -93,7 +111,7 @@
  
  inline static int play_playlist(struct bluray_priv_s *priv, int playlist)
 \ No newline at end of file
-@@ -389,13 +459,23 @@
+@@ -389,13 +469,23 @@
      if (!mp_msg_test(s->log, MSGL_DEBUG))
          bd_set_debug_mask(0);
  
@@ -124,7 +142,7 @@
      if (!check_disc_info(s)) {
          destruct(b);
 \ No newline at end of file
-@@ -408,7 +488,7 @@
+@@ -408,7 +498,7 @@
          return STREAM_ERROR;
      } else {
          /* check for available titles on disc */
@@ -134,7 +152,7 @@
              MP_ERR(s, "Can't find any Blu-ray-compatible title here.\n");
              destruct(b);
 \ No newline at end of file
-@@ -420,7 +500,7 @@
+@@ -420,7 +510,7 @@
          /* parse titles information */
          uint64_t max_duration = 0;
          for (int i = 0; i < b->num_titles; i++) {
@@ -144,7 +162,7 @@
                  continue;
  
 \ No newline at end of file
-@@ -444,7 +524,7 @@
+@@ -444,7 +534,7 @@
      b->current_title = -1;
  
      // initialize libbluray event queue
@@ -154,7 +172,7 @@
      select_initial_title(s, title_guess);
  
 \ No newline at end of file
-@@ -608,4 +688,4 @@
+@@ -608,4 +698,4 @@
      .open = bdmv_dir_stream_open,
      .protocols = (const char*const[]){ "file", "", NULL },
      .stream_origin = STREAM_ORIGIN_UNSAFE,
