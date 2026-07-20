@@ -249,6 +249,7 @@ video_default_options = [
     '--enable-demuxer=subviewer',
     '--enable-demuxer=subviewer1',
     '--enable-demuxer=vplayer',
+    '--enable-decoder=pgssub',
 
     # hwaccels
     '--enable-hwaccel=h263_videotoolbox',
