@@ -1,117 +1,163 @@
 --- mpv-0.36.0-original/stream/stream_bluray.c	2026-07-15 18:34:51
-+++ mpv-0.36.0-modified/stream/stream_bluray.c	2026-07-19 20:55:33
-@@ -50,6 +50,10 @@
- #include "sub/img_convert.h"
- #include "video/mp_image.h"
++++ mpv-0.36.0-modified/stream/stream_bluray.c	2026-07-20 12:16:39
+@@ -29,6 +29,7 @@
+ #include <string.h>
+ #include <strings.h>
+ #include <assert.h>
++#include <stdio.h>
  
-+#if HAVE_LIBCURL
-+#include "http_udf_fs.h"
-+#endif
-+
- #define BLURAY_SECTOR_SIZE     6144
- 
- #define BLURAY_DEFAULT_ANGLE      0
-@@ -86,6 +90,9 @@
-     char *cfg_device;
+ #include <libbluray/bluray.h>
+ #include <libbluray/meta_data.h>
+\ No newline at end of file
+@@ -87,12 +88,81 @@
  
      bool use_nav;
-+
-+    void *remote_fs_ctx;   // 远程蓝光上下文
-+    char *remote_device;   // 保存远程 URL（用于析构时释放）
  };
- 
- static void destruct(struct bluray_priv_s *priv)
-@@ -105,9 +112,27 @@
-     return bd_select_title(priv->bd, title);
- }
- 
--static void bluray_stream_close(stream_t *s)
--{
--    destruct(s->priv);
-+// static void bluray_stream_close(stream_t *s)
-+// {
-+//     destruct(s->priv);
-+// }
 +
-+static void bluray_stream_close(stream_t *s) {
-+    struct bluray_priv_s *priv = s->priv;
-+    if (!priv) return;
++/* ---------- HTTP Blu-ray stream callbacks ---------- */
++static int http_read_cb(void *stream_ptr, uint8_t *buf, int lba, int num_blocks)
++{
++    struct stream *s = stream_ptr;
++    int64_t pos = (int64_t)lba * 2048;
++    if (stream_seek(s, pos) < 0)
++        return -1;
 +
-+#if HAVE_LIBCURL
-+    if (priv->remote_fs_ctx) {
-+        http_udf_fs_destroy(priv->remote_fs_ctx);
-+        priv->remote_fs_ctx = NULL;
++    int size = num_blocks * 2048;
++    int read_bytes = stream_read(s, buf, size);
++    return (read_bytes == size) ? num_blocks : -1;
++}
++
++static int64_t http_seek_cb(void *stream_ptr, int64_t offset, int whence)
++{
++    struct stream *s = stream_ptr;
++    int64_t base;
++    switch (whence) {
++    case SEEK_SET: base = 0; break;
++    case SEEK_CUR: base = stream_tell(s); break;
++    case SEEK_END: base = stream_get_size(s); break;
++    default: return -1;
 +    }
-+    talloc_free(priv->remote_device);
-+#endif
++    int64_t new_pos = base + offset;
++    if (new_pos < 0) return -1;
++    if (stream_seek(s, new_pos) < 0) return -1;
++    return new_pos;
++}
 +
-+    if (priv->title_info)
-+        bd_free_title_info(priv->title_info);
++static void http_close_cb(void *stream_ptr)
++{
++    struct stream *s = stream_ptr;
++    free_stream(s);
++}
++
++static int open_bd_http(stream_t *stream, const char *url)
++{
++    struct bluray_priv_s *b = stream->priv;
++    struct mpv_global *global = stream->global;
++
++    struct stream *http_stream = stream_create(url,
++                                STREAM_READ | STREAM_NETWORK_RELIABLE,
++                                NULL, global);
++    if (!http_stream)
++        return STREAM_UNSUPPORTED;
++
++    BD_STREAM_INFO info = {
++        .stream = http_stream,
++        .read   = http_read_cb,
++        .seek   = http_seek_cb,
++        .close  = http_close_cb,
++    };
+ 
++    BLURAY *bd = bd_open_stream(&info);
++    if (!bd) {
++        free_stream(http_stream);
++        return STREAM_UNSUPPORTED;
++    }
++
++    // 缓存 2048 个扇区 ≈ 4 MB，大幅减少 HTTP Range 请求
++    bd_set_cache_size(bd, 2048);
++    b->bd = bd;
++
++    MP_VERBOSE(stream, "Opened Blu-ray over HTTP: %s\n", url);
++    return STREAM_OK;
++}
++/* ---------- end of HTTP additions ---------- */
++
+ static void destruct(struct bluray_priv_s *priv)
+ {
+     if (priv->title_info)
+         bd_free_title_info(priv->title_info);
+-    bd_close(priv->bd);
 +    if (priv->bd)
 +        bd_close(priv->bd);
  }
  
- static void handle_event(stream_t *s, const BD_EVENT *ev)
-@@ -390,12 +415,58 @@
+ inline static int play_playlist(struct bluray_priv_s *priv, int playlist)
+\ No newline at end of file
+@@ -389,13 +459,23 @@
+     if (!mp_msg_test(s->log, MSGL_DEBUG))
          bd_set_debug_mask(0);
  
-     /* open device */
+-    /* open device */
 -    BLURAY *bd = bd_open(device, NULL);
 -    if (!bd) {
 -        MP_ERR(s, "Couldn't open Blu-ray device: %s\n", device);
 -        return STREAM_UNSUPPORTED;
-+        char *device_tmp = mp_get_user_path(NULL, s->global, device);
-+    BLURAY *bd = NULL;
-+
-+#if HAVE_LIBCURL
-+    if (strncmp(device_tmp, "http://", 7) == 0 || strncmp(device_tmp, "https://", 8) == 0) {
-+        void *fs_ctx = http_udf_fs_init(device_tmp);
-+        if (!fs_ctx) {
-+            MP_ERR(s, "Failed to initialize remote Blu-ray filesystem.\n");
-+            talloc_free(device_tmp);
-+            return STREAM_UNSUPPORTED;
-+        }
-+        b->remote_fs_ctx = fs_ctx;
-+        b->remote_device = talloc_strdup(b, device_tmp);
-+
-+        // 创建空的 BLURAY 句柄
-+        bd = bd_init();
-+        if (!bd) {
-+            MP_ERR(s, "bd_init() failed.\n");
-+            http_udf_fs_destroy(fs_ctx);
-+            b->remote_fs_ctx = NULL;
-+            talloc_free(device_tmp);
-+            return STREAM_UNSUPPORTED;
-+        }
-+
-+        // 设置虚拟文件系统
-+        int ret = bd_open_files(bd, fs_ctx, http_udf_dir_open, http_udf_file_open);
-+        if (ret != 0) {
-+            MP_ERR(s, "Couldn't open remote Blu-ray via bd_open_files.\n");
-+            bd_close(bd);
-+            http_udf_fs_destroy(fs_ctx);
-+            b->remote_fs_ctx = NULL;
-+            talloc_free(device_tmp);
-+            return STREAM_UNSUPPORTED;
-+        }
-+    } else
-+#endif
-+    {
-+        bd = bd_open(device_tmp, NULL);
++    /* ---- Detect HTTP URL and use streaming path ---- */
++    bool is_http = strncmp(device, "http://", 7) == 0 ||
++                   strncmp(device, "https://", 8) == 0;
++    if (is_http) {
++        int ret = open_bd_http(s, device);
++        if (ret != STREAM_OK)
++            return ret;
++        // b->bd is now set by open_bd_http
++    } else {
++        /* open device */
++        BLURAY *bd = bd_open(device, NULL);
 +        if (!bd) {
 +            MP_ERR(s, "Couldn't open Blu-ray device: %s\n", device);
-+            talloc_free(device_tmp);
 +            return STREAM_UNSUPPORTED;
 +        }
++        b->bd = bd;
      }
-+    talloc_free(device_tmp);
-     b->bd = bd;
-+    // BLURAY *bd = bd_open(device, NULL);
-+    // if (!bd) {
-+    //     MP_ERR(s, "Couldn't open Blu-ray device: %s\n", device);
-+    //     return STREAM_UNSUPPORTED;
-+    // }
-+    // b->bd = bd;
+-    b->bd = bd;
  
      if (!check_disc_info(s)) {
          destruct(b);
+\ No newline at end of file
+@@ -408,7 +488,7 @@
+         return STREAM_ERROR;
+     } else {
+         /* check for available titles on disc */
+-        b->num_titles = bd_get_titles(bd, TITLES_RELEVANT, 0);
++        b->num_titles = bd_get_titles(b->bd, TITLES_RELEVANT, 0);
+         if (!b->num_titles) {
+             MP_ERR(s, "Can't find any Blu-ray-compatible title here.\n");
+             destruct(b);
+\ No newline at end of file
+@@ -420,7 +500,7 @@
+         /* parse titles information */
+         uint64_t max_duration = 0;
+         for (int i = 0; i < b->num_titles; i++) {
+-            BLURAY_TITLE_INFO *ti = bd_get_title_info(bd, i, 0);
++            BLURAY_TITLE_INFO *ti = bd_get_title_info(b->bd, i, 0);
+             if (!ti)
+                 continue;
+ 
+\ No newline at end of file
+@@ -444,7 +524,7 @@
+     b->current_title = -1;
+ 
+     // initialize libbluray event queue
+-    bd_get_event(bd, NULL);
++    bd_get_event(b->bd, NULL);
+ 
+     select_initial_title(s, title_guess);
+ 
+\ No newline at end of file
+@@ -608,4 +688,4 @@
+     .open = bdmv_dir_stream_open,
+     .protocols = (const char*const[]){ "file", "", NULL },
+     .stream_origin = STREAM_ORIGIN_UNSAFE,
+-};
++};
+\ No newline at end of file
