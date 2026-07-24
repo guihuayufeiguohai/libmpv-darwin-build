@@ -77,7 +77,7 @@
   mpv = {
     version = "0.41.0";
     url = "https://github.com/mpv-player/mpv/archive/refs/tags/v0.41.0.tar.gz";
-    sha256 = "68477b3b49fc9ae515d0ba780c2c7be1604791f9f12b435ee593d19127ba6097";
+    sha256 = "ee21092a5ee427353392360929dc64645c54479aefdb5babc5cfbb5fad626209";
   };
   uchardet = {
     version = "0.0.8";
