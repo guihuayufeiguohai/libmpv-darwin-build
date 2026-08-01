@@ -54,7 +54,7 @@ let
     fi
     patch -p1 <${../../../patches/stream_bluray.patch}
 
-    # patch -p1 <${../../../patches/ao_audiounit_tap.patch}
+    patch -p1 <${../../../patches/ao_audiounit_tap.patch}
     echo "// force rebuild $(date)" >> audio/out/ao_audiounit.m
     cd -
 
