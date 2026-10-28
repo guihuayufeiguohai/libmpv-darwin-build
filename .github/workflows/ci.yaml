@@ -1,19 +1,20 @@
 name: ci
 
 on:
+  workflow_dispatch:        # 手动触发：Actions 页面点 "Run workflow"
+    inputs:
+      ref:
+        description: '要构建的分支 / tag'
+        required: false
+        default: ''
   push:
-    branches:
-      - main
     tags:
-      - "*"
-  pull_request:
-    branches:
-      - "*"
+      - "*"                 # 保留：推 tag 才构建 + 自动发 Release
+  # 已删除 push.branches: main 和 pull_request
 
 jobs:
   ci:
     name: ci
-    # https://github.com/actions/runner-images/blob/main/images/macos/macos-15-arm64-Readme.md
     runs-on: macos-15
     permissions:
       contents: write
@@ -26,6 +27,8 @@ jobs:
           printf "%-23s %s\n" "Arch:"           "$(uname -m)"
 
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}   # 手动触发时可指定分支/tag
 
       - uses: DeterminateSystems/nix-installer-action@v22
         with:
@@ -43,26 +46,25 @@ jobs:
         with:
           use-flakehub: false
 
-      # See ${workspace}/nix/overlays/xcode.nix
       - name: Xcode path
         id: xcode_path
         run: |
           XCODE_PATH=$(realpath /Applications/Xcode_16.1.0.app)
-
           ${XCODE_PATH}/Contents/Developer/usr/bin/xcodebuild -version
-
           echo "xcode_path=${XCODE_PATH}" >> $GITHUB_OUTPUT
 
       - name: Build version
         id: version
         run: |
+          VERSION=""
           if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
             VERSION="${GITHUB_REF#refs/tags/}"
+          else
+            # 手动触发时给个兜底版本号，避免 VERSION 为空
+            VERSION="dev-$(git rev-parse --short HEAD)"
           fi
-
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
 
-      # See ${workspace}/Makefile
       - name: Build
         env:
           XCODE_PATH: ${{ steps.xcode_path.outputs.xcode_path }}
