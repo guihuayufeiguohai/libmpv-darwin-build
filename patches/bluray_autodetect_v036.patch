@@ -18,7 +18,7 @@
 -    struct stream *http_stream = stream_create(url, STREAM_READ, NULL, global);
 +    // Force the ffmpeg (http/https) stream implementation and DIRECT origin:
 +    //  * .sinfo avoids autoprobing. Autoprobe would re-enter
-+    //    bdmv_http_stream_open() (it is registered in stream_list ahead of
++    //    bdmv_http_stream_open() (registered in stream_list ahead of
 +    //    stream_info_ffmpeg) -> infinite recursion / stack overflow.
 +    //  * STREAM_READ alone leaves origin at 0, and check_origin(0, NET) == 0,
 +    //    so the http stream would be rejected as STREAM_UNSAFE -> NULL.
@@ -53,17 +53,13 @@
      // We allow the path to point to a directory containing BDMV/, a
      // directory containing MovieObject.bdmv, or that file itself.
      if (!check_bdmv(path)) {
-@@ -668,4 +698,68 @@
+@@ -667,5 +697,64 @@
+     .name = "bdmv/bluray",
      .open = bdmv_dir_stream_open,
      .protocols = (const char*const[]){ "file", "", NULL },
-     .stream_origin = STREAM_ORIGIN_UNSAFE,
+-    .stream_origin = STREAM_ORIGIN_UNSAFE,
 -};
 \ No newline at end of file
-+};
-+const stream_info_t stream_info_bdmv_dir = {
-+    .name = "bdmv/bluray",
-+    .open = bdmv_dir_stream_open,
-+    .protocols = (const char*const[]){ "file", "", NULL },
 +    // STREAM_ORIGIN_FS (was UNSAFE): this handler only ever touches local paths
 +    // ("file" / ""), so it is no less safe than stream_info_file. Setting FS
 +    // makes check_origin(FS, FS) pass, so media_kit's loadlist path (which
@@ -124,6 +120,7 @@
 +    // rejected, while check_origin(FS, NET) passes.
 +    .stream_origin = STREAM_ORIGIN_NET,
 +};
++
 --- a/stream/stream.c
 +++ b/stream/stream.c
 @@ -56,6 +56,7 @@
