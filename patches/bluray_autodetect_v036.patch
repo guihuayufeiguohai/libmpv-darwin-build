@@ -1,6 +1,39 @@
 --- a/stream/stream_bluray.c
 +++ b/stream/stream_bluray.c
-@@ -574,6 +574,19 @@
+@@ -91,6 +91,10 @@
+     struct stream *http_stream; 
+ };
+ 
++// Declared in stream/stream_lavf.c. Used below to force the http/https
++// stream implementation instead of autoprobing.
++extern const stream_info_t stream_info_ffmpeg;
++
+ /* ---------- HTTP Blu-ray stream callback & opener ---------- */
+ static int http_read_cb(void *handle, void *buf, int lba, int num_blocks)
+ {
+@@ -109,7 +113,20 @@
+     struct bluray_priv_s *b = stream->priv;
+     struct mpv_global *global = stream->global;
+ 
+-    struct stream *http_stream = stream_create(url, STREAM_READ, NULL, global);
++    // Force the ffmpeg (http/https) stream implementation and DIRECT origin:
++    //  * .sinfo avoids autoprobing. Autoprobe would re-enter
++    //    bdmv_http_stream_open() (it is registered in stream_list ahead of
++    //    stream_info_ffmpeg) -> infinite recursion / stack overflow.
++    //  * STREAM_READ alone leaves origin at 0, and check_origin(0, NET) == 0,
++    //    so the http stream would be rejected as STREAM_UNSAFE -> NULL.
++    struct stream_open_args args = {
++        .global = global,
++        .flags  = STREAM_READ | STREAM_ORIGIN_DIRECT,
++        .url    = url,
++        .sinfo  = &stream_info_ffmpeg,
++    };
++    struct stream *http_stream = NULL;
++    stream_create_with_args(&args, &http_stream);
+     if (!http_stream)
+         return STREAM_UNSUPPORTED;
+ 
+@@ -634,6 +651,19 @@
      if (!path)
          goto unsupported;
  
@@ -20,11 +53,17 @@
      // We allow the path to point to a directory containing BDMV/, a
      // directory containing MovieObject.bdmv, or that file itself.
      if (!check_bdmv(path)) {
-@@ -607,5 +620,63 @@
-     .name = "bdmv/bluray",
+@@ -668,4 +698,68 @@
      .open = bdmv_dir_stream_open,
      .protocols = (const char*const[]){ "file", "", NULL },
--    .stream_origin = STREAM_ORIGIN_UNSAFE,
+     .stream_origin = STREAM_ORIGIN_UNSAFE,
+-};
+\ No newline at end of file
++};
++const stream_info_t stream_info_bdmv_dir = {
++    .name = "bdmv/bluray",
++    .open = bdmv_dir_stream_open,
++    .protocols = (const char*const[]){ "file", "", NULL },
 +    // STREAM_ORIGIN_FS (was UNSAFE): this handler only ever touches local paths
 +    // ("file" / ""), so it is no less safe than stream_info_file. Setting FS
 +    // makes check_origin(FS, FS) pass, so media_kit's loadlist path (which
@@ -33,10 +72,9 @@
 +    .stream_origin = STREAM_ORIGIN_FS,
 +};
 +
-+
 +/* ---------- auto-detect Blu-ray ISO over HTTP(S) ---------- */
 +/*
-+ * Open http(s) Blu-ray images directly (including extension-less URLs).
++ * Open http(s) Blu-ray images directly, including extension-less URLs.
 + * Returns STREAM_UNSUPPORTED on miss so stream_info_ffmpeg takes over.
 + */
 +static int bdmv_http_stream_open(stream_t *stream)
@@ -51,6 +89,7 @@
 +    };
 +
 +    const char *url = stream->url ? stream->url : "";
++    // Only look at the part before '?' / '#', so that ".iso?token=..." matches.
 +    bstr base = { (uint8_t *)url, strcspn(url, "?#") };
 +    for (int i = 0; skip_ext[i]; i++) {
 +        if (bstr_case_endswith(base, bstr0(skip_ext[i])))
@@ -84,7 +123,7 @@
 +    // origin to STREAM_ORIGIN_FS; check_origin(FS, UNSAFE) == 0 would be
 +    // rejected, while check_origin(FS, NET) passes.
 +    .stream_origin = STREAM_ORIGIN_NET,
- };
++};
 --- a/stream/stream.c
 +++ b/stream/stream.c
 @@ -56,6 +56,7 @@
