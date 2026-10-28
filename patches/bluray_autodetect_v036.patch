@@ -1,0 +1,107 @@
+--- a/stream/stream_bluray.c
++++ b/stream/stream_bluray.c
+@@ -574,6 +574,19 @@
+     if (!path)
+         goto unsupported;
+ 
++    // Blu-ray ISO image. Backported from mpv master: v0.36.0 only probes BDMV
++    // directories, so a plain .iso path never reaches libbluray.
++    if (bstr_case_endswith(bstr0(path), bstr0(".iso")) ||
++        bstr_case_endswith(bstr0(path), bstr0(".img")))
++    {
++        priv->cfg_device = talloc_strdup(priv, path);
++        int r = bluray_stream_open_internal(stream);
++        if (r != STREAM_OK)
++            goto unsupported;   // not a Blu-ray image: let file/ffmpeg handle it
++        MP_INFO(stream, "Blu-ray ISO image detected. Redirecting to bluray://\n");
++        return r;
++    }
++
+     // We allow the path to point to a directory containing BDMV/, a
+     // directory containing MovieObject.bdmv, or that file itself.
+     if (!check_bdmv(path)) {
+@@ -607,5 +620,63 @@
+     .name = "bdmv/bluray",
+     .open = bdmv_dir_stream_open,
+     .protocols = (const char*const[]){ "file", "", NULL },
+-    .stream_origin = STREAM_ORIGIN_UNSAFE,
++    // STREAM_ORIGIN_FS (was UNSAFE): this handler only ever touches local paths
++    // ("file" / ""), so it is no less safe than stream_info_file. Setting FS
++    // makes check_origin(FS, FS) pass, so media_kit's loadlist path (which
++    // rewrites entry origin to STREAM_ORIGIN_FS) is not rejected with
++    // "Refusing to load potentially unsafe URL from a playlist".
++    .stream_origin = STREAM_ORIGIN_FS,
++};
++
++
++/* ---------- auto-detect Blu-ray ISO over HTTP(S) ---------- */
++/*
++ * Open http(s) Blu-ray images directly (including extension-less URLs).
++ * Returns STREAM_UNSUPPORTED on miss so stream_info_ffmpeg takes over.
++ */
++static int bdmv_http_stream_open(stream_t *stream)
++{
++    // Fast path: skip well-known non-disc extensions, zero extra network cost.
++    static const char *const skip_ext[] = {
++        ".mp4", ".m4v", ".mkv", ".webm", ".mov", ".avi", ".flv",
++        ".ts", ".m2ts", ".m4s",
++        ".m3u8", ".mpd", ".m3u", ".pls",
++        ".mp3", ".m4a", ".aac", ".flac", ".ogg", ".opus", ".wav",
++        ".srt", ".ass", ".ssa", ".vtt", ".json", ".xml", NULL
++    };
++
++    const char *url = stream->url ? stream->url : "";
++    bstr base = { (uint8_t *)url, strcspn(url, "?#") };
++    for (int i = 0; skip_ext[i]; i++) {
++        if (bstr_case_endswith(base, bstr0(skip_ext[i])))
++            return STREAM_UNSUPPORTED;
++    }
++
++    if (!stream->access_references)
++        return STREAM_UNSUPPORTED;
++
++    struct bluray_priv_s *priv = talloc_zero(stream, struct bluray_priv_s);
++    stream->priv = priv;
++    priv->cfg_title = BLURAY_DEFAULT_TITLE;
++    priv->cfg_device = talloc_strdup(priv, url);
++
++    // Routes to open_bd_http() when cfg_device is http(s).
++    int r = bluray_stream_open_internal(stream);
++    if (r != STREAM_OK) {
++        talloc_free(priv);
++        stream->priv = NULL;
++        return STREAM_UNSUPPORTED;
++    }
++    MP_INFO(stream, "Blu-ray ISO over HTTP detected.\n");
++    return r;
++}
++
++const stream_info_t stream_info_bdmv_http = {
++    .name = "bdmv-http",
++    .open = bdmv_http_stream_open,
++    .protocols = (const char *const[]){ "http", "https", NULL },
++    // STREAM_ORIGIN_NET (not UNSAFE): media_kit's loadlist rewrites entry
++    // origin to STREAM_ORIGIN_FS; check_origin(FS, UNSAFE) == 0 would be
++    // rejected, while check_origin(FS, NET) passes.
++    .stream_origin = STREAM_ORIGIN_NET,
+ };
+--- a/stream/stream.c
++++ b/stream/stream.c
+@@ -56,6 +56,7 @@
+ extern const stream_info_t stream_info_ifo_dvdnav;
+ extern const stream_info_t stream_info_dvdnav;
+ extern const stream_info_t stream_info_bdmv_dir;
++extern const stream_info_t stream_info_bdmv_http;
+ extern const stream_info_t stream_info_bluray;
+ extern const stream_info_t stream_info_bdnav;
+ extern const stream_info_t stream_info_edl;
+@@ -66,6 +67,9 @@
+ #if HAVE_CDDA
+     &stream_info_cdda,
+ #endif
++#if HAVE_LIBBLURAY
++    &stream_info_bdmv_http,   /* must precede stream_info_ffmpeg */
++#endif
+     &stream_info_ffmpeg,
+     &stream_info_ffmpeg_unsafe,
+     &stream_info_avdevice,
