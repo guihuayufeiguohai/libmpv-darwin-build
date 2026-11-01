@@ -32,8 +32,48 @@
 +    stream_create_with_args(&args, &http_stream);
      if (!http_stream)
          return STREAM_UNSUPPORTED;
+
+@@ -418,6 +435,28 @@
+     }
+ }
  
-@@ -634,6 +651,19 @@
++/* Byte-level seek within the currently selected title.
++ *
++ * mpv 0.36 never sets s->seek for the bluray stream, so s->seekable stays
++ * false. demux_disc's d_seek() resets the lavf sub-demuxer with
++ * demux_seek(slave, 0, SEEK_FACTOR | SEEK_FORCE), which ends up calling
++ * stream_seek(s, 0). Without byte seeking that fails with
++ * "Cannot seek backward in linear streams!", so the sub-demuxer is left at its
++ * old position and the post-seek data is fed into stale decoder state. The
++ * result is bogus PTS jumps ("PTS discontinuity"), corrupt NAL units,
++ * VideoToolbox -12909, "Error while decoding frame (hardware decoding)!"
++ * and eventually "Error decoding audio." (DTS block decode failure).
++ */
++static int bluray_stream_seek(stream_t *s, int64_t pos)
++{
++    struct bluray_priv_s *b = s->priv;
++    if (pos < 0)
++        return 0;
++    // bd_seek(): byte position within the currently selected title.
++    // Returns the new position (0 is valid) or -1 on error.
++    return bd_seek(b->bd, pos) >= 0;
++}
++
+ static int bluray_stream_open_internal(stream_t *s)
+ {
+     struct bluray_priv_s *b = s->priv;
+@@ -513,6 +552,10 @@
+     s->control     = bluray_stream_control;
+     s->priv        = b;
+     s->demuxer     = "+disc";
++    // Enable byte seeking so the disc demuxer can reset its sub-demuxer.
++    // Both must be set: stream.c asserts (s->seekable == !!s->seek).
++    s->seek        = bluray_stream_seek;
++    s->seekable    = true;
+ 
+     MP_VERBOSE(s, "Blu-ray successfully opened.\n");
+ 
+@@ -634,6 +677,19 @@
      if (!path)
          goto unsupported;
  
@@ -53,7 +93,7 @@
      // We allow the path to point to a directory containing BDMV/, a
      // directory containing MovieObject.bdmv, or that file itself.
      if (!check_bdmv(path)) {
-@@ -667,5 +697,64 @@
+@@ -667,5 +723,64 @@
      .name = "bdmv/bluray",
      .open = bdmv_dir_stream_open,
      .protocols = (const char*const[]){ "file", "", NULL },
