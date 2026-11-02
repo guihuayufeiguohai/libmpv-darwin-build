@@ -1,27 +1,7 @@
 --- a/stream/stream_bluray.c
 +++ b/stream/stream_bluray.c
-@@ -54,6 +54,10 @@
- 
- #define BLURAY_SECTOR_SIZE     6144
- 
-+/* Read-ahead size for the HTTP Blu-ray callback. 2 MiB keeps a whole
-+ * metadata cluster in memory without wasting much RAM. */
-+#define BD_HTTP_CACHE_SIZE      (2 * 1024 * 1024)
-+
- #define BLURAY_DEFAULT_ANGLE      0
- #define BLURAY_DEFAULT_CHAPTER    0
- #define BLURAY_PLAYLIST_TITLE    -3
-@@ -89,19 +93,60 @@
- 
-     bool use_nav;
+@@ -91,17 +91,30 @@
      struct stream *http_stream; 
-+
-+    /* HTTP read-ahead cache. libbluray reads ISO metadata from scattered
-+     * offsets (0.5-7 MB apart) in small 2-4 KB chunks, so without caching each
-+     * read costs a full HTTP seek + reconnect (~280 ms). */
-+    uint8_t *cache_buf;
-+    int64_t  cache_start;
-+    int64_t  cache_len;
  };
  
 +// Declared in stream/stream_lavf.c. Used below to force the http/https
@@ -31,53 +11,29 @@
  /* ---------- HTTP Blu-ray stream callback & opener ---------- */
  static int http_read_cb(void *handle, void *buf, int lba, int num_blocks)
  {
--    struct stream *s = handle;
-+    struct bluray_priv_s *b = handle;
-+    struct stream *s = b->http_stream;
+     struct stream *s = handle;
      int64_t pos = (int64_t)lba * 2048;
 -    if (stream_seek(s, pos) < 0)
-+    int size = num_blocks * 2048;
 +
-+    /* Step 1: cache hit -> no network round-trip at all. */
-+    if (b->cache_len > 0 &&
-+        pos >= b->cache_start &&
-+        pos + size <= b->cache_start + b->cache_len)
-+    {
-+        memcpy(buf, b->cache_buf + (pos - b->cache_start), size);
-+        return num_blocks;
-+    }
-+
-+    /* Step 2: cache miss -> seek, then pull a big block in.
-+     *
-+     * NOTE: stream_seek() returns bool (true/false), never a negative value.
-+     * The original `if (stream_seek(s, pos) < 0)` was therefore always false,
-+     * so a failed seek was silently ignored and stream_read() returned data
-+     * from the OLD position. That is what produced the corrupt mpegts packets
-+     * ("PES packet size mismatch", identical dts repeated across seeks) and
-+     * the bogus "PTS discontinuity" jumps that led to h264 corruption,
-+     * VideoToolbox -12909 and "Error decoding audio." */
++    /* stream_seek() returns bool (true/false), never a negative value, so the
++     * original `if (stream_seek(s, pos) < 0)` was always false: a failed seek
++     * was silently ignored and stream_read() then returned bytes from the OLD
++     * position. That is what produced corrupt mpegts packets (identical dts
++     * repeated across seeks) and bogus "PTS discontinuity" jumps, cascading
++     * into h264 corruption, VideoToolbox -12909 and "Error decoding audio." */
 +    if (!stream_seek(s, pos))
          return -1;
  
--    int size = num_blocks * 2048;
--    int read_bytes = stream_read(s, buf, size);
+     int size = num_blocks * 2048;
+     int read_bytes = stream_read(s, buf, size);
 -    return (read_bytes == size) ? num_blocks : -1;
-+    if (!b->cache_buf)
-+        b->cache_buf = talloc_array(b, uint8_t, BD_HTTP_CACHE_SIZE);
-+
-+    int got = stream_read(s, b->cache_buf, BD_HTTP_CACHE_SIZE);
-+    if (got < size)
++    if (read_bytes != size)
 +        return -1;
-+
-+    b->cache_start = pos;
-+    b->cache_len   = got;
-+
-+    memcpy(buf, b->cache_buf, size);
 +    return num_blocks;
  }
  
  static int open_bd_http(stream_t *stream, const char *url)
-@@ -109,7 +154,20 @@
+@@ -109,7 +122,20 @@
      struct bluray_priv_s *b = stream->priv;
      struct mpv_global *global = stream->global;
  
@@ -99,69 +55,7 @@
      if (!http_stream)
          return STREAM_UNSUPPORTED;
  
-@@ -120,15 +178,19 @@
-         return STREAM_UNSUPPORTED;
-     }
- 
-+    // Handle is now the bluray priv (for the read-ahead cache), and must be
-+    // set BEFORE bd_open_stream() because libbluray reads metadata inside it.
-+    b->http_stream = http_stream;
-+
-     // 绑定自定义读取回调，成功后 bd 即可正常使用
--    if (bd_open_stream(bd, http_stream, http_read_cb) <= 0) {
-+    if (bd_open_stream(bd, b, http_read_cb) <= 0) {
-+        b->http_stream = NULL;
-         bd_close(bd);
-         free_stream(http_stream);
-         return STREAM_UNSUPPORTED;
-     }
- 
-     b->bd = bd;
--    b->http_stream = http_stream;   // 保存以便后续释放
- 
-     MP_VERBOSE(stream, "Opened Blu-ray over HTTP: %s\n", url);
-     return STREAM_OK;
-@@ -418,6 +480,28 @@
-     }
- }
- 
-+/* Byte-level seek within the currently selected title.
-+ *
-+ * mpv 0.36 never sets s->seek for the bluray stream, so s->seekable stays
-+ * false. demux_disc's d_seek() resets the lavf sub-demuxer with
-+ * demux_seek(slave, 0, SEEK_FACTOR | SEEK_FORCE), which ends up calling
-+ * stream_seek(s, 0). Without byte seeking that fails with
-+ * "Cannot seek backward in linear streams!", so the sub-demuxer is left at its
-+ * old position and the post-seek data is fed into stale decoder state. The
-+ * result is bogus PTS jumps ("PTS discontinuity"), corrupt NAL units,
-+ * VideoToolbox -12909, "Error while decoding frame (hardware decoding)!"
-+ * and eventually "Error decoding audio." (DTS block decode failure).
-+ */
-+static int bluray_stream_seek(stream_t *s, int64_t pos)
-+{
-+    struct bluray_priv_s *b = s->priv;
-+    if (pos < 0)
-+        return 0;
-+    // bd_seek(): byte position within the currently selected title.
-+    // Returns the new position (0 is valid) or -1 on error.
-+    return bd_seek(b->bd, pos) >= 0;
-+}
-+
- static int bluray_stream_open_internal(stream_t *s)
- {
-     struct bluray_priv_s *b = s->priv;
-@@ -513,6 +597,10 @@
-     s->control     = bluray_stream_control;
-     s->priv        = b;
-     s->demuxer     = "+disc";
-+    // Enable byte seeking so the disc demuxer can reset its sub-demuxer.
-+    // Both must be set: stream.c asserts (s->seekable == !!s->seek).
-+    s->seek        = bluray_stream_seek;
-+    s->seekable    = true;
- 
-     MP_VERBOSE(s, "Blu-ray successfully opened.\n");
- 
-@@ -634,6 +722,19 @@
+@@ -634,6 +660,19 @@
      if (!path)
          goto unsupported;
  
@@ -181,7 +75,7 @@
      // We allow the path to point to a directory containing BDMV/, a
      // directory containing MovieObject.bdmv, or that file itself.
      if (!check_bdmv(path)) {
-@@ -667,5 +768,64 @@
+@@ -667,5 +706,64 @@
      .name = "bdmv/bluray",
      .open = bdmv_dir_stream_open,
      .protocols = (const char*const[]){ "file", "", NULL },
