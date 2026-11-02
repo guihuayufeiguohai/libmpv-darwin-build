@@ -55,7 +55,57 @@
      if (!http_stream)
          return STREAM_UNSUPPORTED;
  
-@@ -634,6 +660,19 @@
+@@ -418,6 +444,39 @@
+     }
+ }
+ 
++/* Byte-level seek. Used by demux_disc to force-reset its lavf sub-demuxer.
++ *
++ * demux_disc.c d_seek() does, before every real seek:
++ *     demux_seek(p->slave, 0, SEEK_FACTOR | SEEK_FORCE);   // -> stream_seek(s, 0)
++ *     stream_drop_buffers(...);
++ *     stream_control(..., STREAM_CTRL_SEEK_TO_TIME, ...);  // -> bd_seek_time()
++ *
++ * Two failure modes, both observed in logs:
++ *  (a) s->seek absent: lavf's seek fails, it keeps its stale packet queue and
++ *      emits packets from the PREVIOUS position -> "PES packet size mismatch",
++ *      the same bogus dts repeated across seeks, "PTS discontinuity" jumps.
++ *  (b) s->seek = bd_seek(): bd_seek(bd, 0) moves libbluray's read pointer to
++ *      byte 0 of the ISO, i.e. the UDF metadata area, so lavf parses raw UDF
++ *      sectors as mpegts -> same corruption, but with garbage instead of stale
++ *      data. (Logs: "stream level seek from <big> to 0/4".)
++ *
++ * So for pos == 0 (the force reset) report success - lavf then drops its
++ * buffers - but leave libbluray's position untouched. The real position is
++ * set immediately afterwards by STREAM_CTRL_SEEK_TO_TIME / bd_seek_time().
++ */
++static int bluray_stream_seek(stream_t *s, int64_t pos)
++{
++    struct bluray_priv_s *b = s->priv;
++    if (pos < 0)
++        return 0;
++    if (pos == 0) {
++        stream_drop_buffers(s);
++        return 1;
++    }
++    // bd_seek(): byte position within the currently selected title.
++    return bd_seek(b->bd, pos) >= 0;
++}
++
+ static int bluray_stream_open_internal(stream_t *s)
+ {
+     struct bluray_priv_s *b = s->priv;
+@@ -513,6 +572,9 @@
+     s->control     = bluray_stream_control;
+     s->priv        = b;
+     s->demuxer     = "+disc";
++    // Both must be set: stream.c asserts (s->seekable == !!s->seek).
++    s->seek        = bluray_stream_seek;
++    s->seekable    = true;
+ 
+     MP_VERBOSE(s, "Blu-ray successfully opened.\n");
+ 
+@@ -634,6 +696,19 @@
      if (!path)
          goto unsupported;
  
@@ -75,7 +125,7 @@
      // We allow the path to point to a directory containing BDMV/, a
      // directory containing MovieObject.bdmv, or that file itself.
      if (!check_bdmv(path)) {
-@@ -667,5 +706,64 @@
+@@ -667,5 +742,64 @@
      .name = "bdmv/bluray",
      .open = bdmv_dir_stream_open,
      .protocols = (const char*const[]){ "file", "", NULL },
