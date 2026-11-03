@@ -134,3 +134,21 @@
          {
              // Makes no sense, so guess instead
              // YCGCO should be separate, but libavcodec disagrees
+
+--- a/video/out/gpu/video.c
++++ b/video/out/gpu/video.c
+@@ -3732,7 +3732,14 @@
+ static bool check_dumb_mode(struct gl_video *p)
+ {
+     struct gl_video_opts *o = &p->opts;
++    // IPT-C2 (Dolby Vision Profile 5) needs the full colour pipeline: the PQ
++    // EOTF, the L'M'S'->RGB matrix applied in pass_color_map(), tone mapping
++    // and gamut mapping. Dumb mode uploads the texture with no conversion
++    // chain at all, so the picture comes out dark and cold. Force the
++    // advanced path for IPT-C2 only; every other format is unaffected.
++    if (p->real_image_params.color.space == MP_CSP_IPT_C2)
++        return false;
+     if (p->use_integer_conversion)
+         return false;
+     if (o->dumb_mode > 0) // requested by user
+         return true;
