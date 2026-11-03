@@ -67,8 +67,8 @@
 +    // ends up at 12.716444s and playback starts ~12s in instead of at 0
 +    // (log: "[disc] reset to time: 12.716444").
 +    // Rewind to the very beginning of the title so base_time becomes 0.
-+    if (bd_tell_time(bd) != 0)
-+        bd_seek_time(bd, 0);
++    if (((struct bluray_priv_s *)s->priv)->bd)
++        bd_seek_time(((struct bluray_priv_s *)s->priv)->bd, 0);
 +
      s->fill_buffer = bluray_stream_fill_buffer;
      s->close       = bluray_stream_close;
