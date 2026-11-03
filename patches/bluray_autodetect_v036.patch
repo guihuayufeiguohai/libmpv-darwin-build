@@ -55,7 +55,25 @@
      if (!http_stream)
          return STREAM_UNSUPPORTED;
  
-@@ -634,6 +660,19 @@
+@@ -508,6 +534,17 @@
+ 
+     select_initial_title(s, title_guess);
+ 
++    // Some discs report a non-zero position immediately after
++    // bd_select_title(). demux_disc.c reset_pts() feeds bd_tell_time() into
++    // p->base_time and then rebase every packet with
++    //     delta = -p->base_dts + p->base_time
++    // so a non-zero base_time shifts the whole timeline: the first packet
++    // ends up at 12.716444s and playback starts ~12s in instead of at 0
++    // (log: "[disc] reset to time: 12.716444").
++    // Rewind to the very beginning of the title so base_time becomes 0.
++    if (bd_tell_time(bd) != 0)
++        bd_seek_time(bd, 0);
++
+     s->fill_buffer = bluray_stream_fill_buffer;
+     s->close       = bluray_stream_close;
+     s->control     = bluray_stream_control;
+@@ -634,6 +671,19 @@
      if (!path)
          goto unsupported;
  
@@ -75,7 +93,7 @@
      // We allow the path to point to a directory containing BDMV/, a
      // directory containing MovieObject.bdmv, or that file itself.
      if (!check_bdmv(path)) {
-@@ -667,5 +706,64 @@
+@@ -667,5 +717,64 @@
      .name = "bdmv/bluray",
      .open = bdmv_dir_stream_open,
      .protocols = (const char*const[]){ "file", "", NULL },
