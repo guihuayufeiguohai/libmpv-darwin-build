@@ -116,5 +116,4 @@
 +    }
 +
      // Pre-scale the incoming values into an absolute scale
-     GLSLF("color.rgb *= vec3(%f);\n", mp_trc_nom_peak(src.gamma));
- 
+     GLSLF("color.rgb *= vec3(%f);\n", mp_trc_nom_peak(src.gamma)); 
