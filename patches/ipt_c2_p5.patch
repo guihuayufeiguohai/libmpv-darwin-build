@@ -116,11 +116,13 @@
 +    }
 +
      // Pre-scale the incoming values into an absolute scale
-     GLSLF("color.rgb *= vec3(%f);\n", mp_trc_nom_peak(src.gamma)); 
+     GLSLF("color.rgb *= vec3(%f);\n", mp_trc_nom_peak(src.gamma));
+ 
+
 
 --- a/video/mp_image.c
 +++ b/video/mp_image.c
-@@ -900,7 +900,8 @@
+@@ -900,9 +900,10 @@
          if (params->color.space != MP_CSP_BT_601 &&
              params->color.space != MP_CSP_BT_709 &&
              params->color.space != MP_CSP_BT_2020_NC &&
