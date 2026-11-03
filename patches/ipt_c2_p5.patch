@@ -117,3 +117,18 @@
 +
      // Pre-scale the incoming values into an absolute scale
      GLSLF("color.rgb *= vec3(%f);\n", mp_trc_nom_peak(src.gamma)); 
+
+--- a/video/mp_image.c
++++ b/video/mp_image.c
+@@ -900,7 +900,8 @@
+         if (params->color.space != MP_CSP_BT_601 &&
+             params->color.space != MP_CSP_BT_709 &&
+             params->color.space != MP_CSP_BT_2020_NC &&
+             params->color.space != MP_CSP_BT_2020_C &&
+             params->color.space != MP_CSP_SMPTE_240M &&
+-            params->color.space != MP_CSP_YCGCO)
++            params->color.space != MP_CSP_YCGCO &&
++            params->color.space != MP_CSP_IPT_C2)
+         {
+             // Makes no sense, so guess instead
+             // YCGCO should be separate, but libavcodec disagrees
